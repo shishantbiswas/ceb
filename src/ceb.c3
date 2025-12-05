@@ -47,25 +47,40 @@ struct Route {
   String[] headers;
 }
 
-struct Middleware {
-  // TODO: implementation
-  int random_field;
+struct MiddlewareCtx {
+  String pathname;
+  HttpVerb method;
+  String[] headers;
 }
 
-fn void Server.start(&this, String host = "127.0.0.1", int port = 8080,
-                     uint backlog = 10000) {
+alias MiddlewareFn = fn void(MiddlewareCtx);
+
+struct Middleware {
+  MiddlewareFn middleware_fn;
+  String name;
+}
+
+fn void Server.start(
+  &this,
+  String host = "127.0.0.1",
+  int port = 8080,
+  uint backlog = 10000
+) {
   this.host = host;
   this.port = port;
   this.backlog = backlog;
-  TcpServerSocket ? server = tcp::listen(this.host, this.port, this.backlog,
-                                         net::SocketOption.REUSEADDR);
+  TcpServerSocket ? server = tcp::listen(
+    this.host,
+    this.port,
+    this.backlog,
+    net::SocketOption.REUSEADDR,
+    );
 
   if (catch err = server) {
     handle_server_error(err);
     return;
   };
   this.server = server;
-  // this.routes.init(&allocator::LIBC_ALLOCATOR);
   io::printf("Server running at port: %d\n", port);
   while (true) {
     TcpSocket ? socket = tcp::accept(&server);
@@ -73,10 +88,10 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080,
       io::printn("accept error!");
       continue;
     }
-    // temp solution use async io or coroutine like setup
-    ThreadArgs args = {.socket =
-                           allocator::clone(&allocator::LIBC_ALLOCATOR, socket),
-                       .server = this};
+    ThreadArgs args = {
+        .socket = allocator::clone(&allocator::LIBC_ALLOCATOR, socket),
+        .server = this,
+    };
 
     thread::Thread thread;
     thread.create(&process_req,
@@ -88,52 +103,75 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080,
 
 fn Server *Server.get(&this, String path, HandlerFn handler_fn) {
   Route route = {
-      .path = path, .method = HttpVerb.GET, .handler_fn = handler_fn};
+      .path = path,
+      .method = HttpVerb.GET,
+      .handler_fn = handler_fn,
+  };
   this.routes.push(route);
   return this;
 }
 
 fn Server *Server.post(&this, String path, HandlerFn handler_fn) {
   Route route = {
-      .path = path, .method = HttpVerb.POST, .handler_fn = handler_fn};
+      .path = path,
+      .method = HttpVerb.POST,
+      .handler_fn = handler_fn,
+  };
   this.routes.push(route);
   return this;
 }
 
 fn Server *Server.put(&this, String path, HandlerFn handler_fn) {
   Route route = {
-      .path = path, .method = HttpVerb.PUT, .handler_fn = handler_fn};
+      .path = path,
+      .method = HttpVerb.PUT,
+      .handler_fn = handler_fn,
+  };
   this.routes.push(route);
   return this;
 }
 
 fn Server *Server.patch(&this, String path, HandlerFn handler_fn) {
   Route route = {
-      .path = path, .method = HttpVerb.PATCH, .handler_fn = handler_fn};
+      .path = path,
+      .method = HttpVerb.PATCH,
+      .handler_fn = handler_fn,
+  };
   this.routes.push(route);
   return this;
 }
 
 fn Server *Server.delete(&this, String path, HandlerFn handler_fn) {
   Route route = {
-      .path = path, .method = HttpVerb.DELETE, .handler_fn = handler_fn};
+      .path = path,
+      .method = HttpVerb.DELETE,
+      .handler_fn = handler_fn,
+  };
   this.routes.push(route);
   return this;
 }
 
 fn Route *Server.find_route(&this, String pathname, HttpVerb method) {
-  @pool_init(&allocator::LIBC_ALLOCATOR, 512){
-      foreach (i, route : this.routes.to_array(&allocator::LIBC_ALLOCATOR)){
-          // TODO: hanlde dynamic pathname
-          if (route.path == pathname &&
-              route.method == method){return &this.routes[i];
-}
-}
-}
-;
-return null;
+  @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
+    foreach (i, route : this.routes.to_array(&allocator::LIBC_ALLOCATOR)) {
+      if (route.path == pathname && route.method == method) {
+        return &this.routes[i];
+      };
+    };
+  };
+  return null;
 }
 
+fn void *Server.use(&this, MiddlewareFn middleware_fn){
+  Middleware mid = {
+    .middleware_fn = middleware_fn,
+    .name = "",
+  };
+  this.middleware.push(mid);
+  return null;
+}
+
+// max header size 
 const ulong MAX_READ_SIZE = /* 5 MiB */ 1024 * 1024 * 5;
 
 fn int process_req(void *arg) {
@@ -153,7 +191,12 @@ fn int process_req(void *arg) {
   char[256] buffer;
 
   while (try usz bytes_read = socket.read(&buffer)) {
-    bytes.append(buffer[:bytes_read]);
+    String header_temp_data = (String)buffer[:bytes_read];
+    if (try usz header_end = header_temp_data.index_of("\r\n\r\n")) {
+      bytes.append(buffer[:header_end]);
+      break;
+    }
+    bytes.append(header_temp_data);
     if (bytes.len() >= MAX_READ_SIZE) {
       return 1;
     };
@@ -161,6 +204,11 @@ fn int process_req(void *arg) {
       break;
     }
   }
+
+  io::print("Output of bytes.str_view(): \n");
+  io::print(bytes.str_view());
+  io::print("\nEnd of bytes.str_view(): \n");
+
   String header_string = bytes.str_view();
   String[] header_list =
       header_string.split(&allocator::LIBC_ALLOCATOR, "\n", 0, true);
@@ -196,6 +244,11 @@ fn int process_req(void *arg) {
   if (route) {
     response = route.handler_fn(req);
   } else {
+    // if provided with a not found handler use that
+    // if(server.not_found)
+    // {
+
+    // }
     DString error;
     error.init(&allocator::LIBC_ALLOCATOR);
     error.append("NOT FOUND 404");
@@ -213,14 +266,15 @@ fn int process_req(void *arg) {
         &allocator::LIBC_ALLOCATOR,
         "HTTP/1.1 %d %s\r\n"
         "Date: Mon,27 Oct 2025 08:30:00 GMT\r\n"
-        "Server: CEB/0.1.0\r\n"
+        "Server: CEB/0.1.1\r\n"
         "Last-Modified: Fri,24 Oct 2025 10:15:30 GMT\r\n"
         "Content-Length: %d\r\n"
         "Content-Type: %s\r\n"
         "Connection: close\r\n\r\n"
         "%s",
         response.status, response.status_text, response.data.len(),
-        response.content_type, response.data.str_view());
+        response.content_type, response.data.str_view(),
+    );
     usz ? send = socket.write(content);
     if (catch err = send) {
       io::printn(err);

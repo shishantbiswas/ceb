@@ -1,0 +1,6 @@
+// disable format on save
+{
+  "[c3]": {
+    "editor.formatOnSave": false
+  }
+}

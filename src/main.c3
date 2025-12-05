@@ -4,13 +4,21 @@ import std::io;
 import ceb;
 import ceb::enums;
 
-fn Response ? homeHandler(Request req) {
+fn Response homeHandler(Request req) {
   DString html_data;
   html_data.init(&allocator::LIBC_ALLOCATOR, 256);
   defer html_data.free();
 
   @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
-    char[] file = file::load(&allocator::LIBC_ALLOCATOR, "index.html") !;
+    char[] ? file = file::load(&allocator::LIBC_ALLOCATOR, "index.html");
+    if (catch excuse = file)
+    {
+      html_data.append("<h1>500 Internal Server Error</h1>");
+      return {
+      .data = html_data,
+      .status = 500,
+      };
+    }
     html_data.append(file);
   };
   return {
@@ -23,13 +31,14 @@ fn Response ? homeHandler(Request req) {
 fn int main() {
   Server server;
   server.routes.init(&allocator::LIBC_ALLOCATOR);
+  defer server.start();
 
   server
     .get("/", (HandlerFn)&homeHandler)
     .post("/", (HandlerFn)&homeHandler);
 
   io::printf("%d handler were registered\n", server.routes.len());
-  server.start();
+  io::printf("%d middleware were registered\n", server.middleware.len());
 
   return 0;
 }
