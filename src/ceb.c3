@@ -47,12 +47,6 @@ struct Route {
   String[] headers;
 }
 
-
-enum RequestType : (int val, String str_val) {
-  INCOMING = {1, "INCOMING"},
-  OUTGOING = {2, "OUTGOING"},
-}
-
 struct MiddlewareCtx {
   String pathname;
   HttpVerb method;
@@ -60,13 +54,7 @@ struct MiddlewareCtx {
   RequestType request_type;
 }
 
-enum MiddlewareInvocation : (int val, String str_val) {
-  BEFORE = {1, "BEFORE"},
-  AFTER = {2, "AFTER"},
-  ALL = {3, "ALL"},
-}
-
-alias MiddlewareFn = fn Middleware(MiddlewareCtx);
+alias MiddlewareFn = fn void(MiddlewareCtx);
 
 struct Middleware {
   String name;
@@ -177,12 +165,8 @@ fn Route *Server.find_route(&this, String pathname, HttpVerb method) {
 }
 
 // TODO: add middleware
-fn void *Server.use(&this, MiddlewareFn middleware_fn, MiddlewareInvocation invocation){
-  Middleware mid = {
-    .middleware_fn = middleware_fn,
-    .invocation = invocation,
-  };
-  this.middleware.push(mid);
+fn void *Server.use(&this, Middleware middleware_config){
+  this.middleware.push(middleware_config);
   return null;
 }
 

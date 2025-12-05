@@ -11,6 +11,7 @@ A lightweight web server framework written in C3, inspired by Hono and express.j
 - Basic request/response handling
 - Thread-based request processing
 - Static file serving capability
+- Hono Style Middleware support
 
 ## Quick Start
 
@@ -33,6 +34,12 @@ fn int main() {
 
     server.get("/", (HandlerFn)&homeHandler);
     
+    server.use({
+    .name = "logger",
+    .middleware_fn = (MiddlewareFn)&logger,
+    .invocation = MiddlewareInvocation.AFTER,
+    });
+
     io::printf("Server starting...\n");
     server.start(); // defaults to localhost:8080
     
