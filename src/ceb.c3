@@ -47,17 +47,31 @@ struct Route {
   String[] headers;
 }
 
+
+enum RequestType : (int val, String str_val) {
+  INCOMING = {1, "INCOMING"},
+  OUTGOING = {2, "OUTGOING"},
+}
+
 struct MiddlewareCtx {
   String pathname;
   HttpVerb method;
   String[] headers;
+  RequestType request_type;
 }
 
-alias MiddlewareFn = fn void(MiddlewareCtx);
+enum MiddlewareInvocation : (int val, String str_val) {
+  BEFORE = {1, "BEFORE"},
+  AFTER = {2, "AFTER"},
+  ALL = {3, "ALL"},
+}
+
+alias MiddlewareFn = fn Middleware(MiddlewareCtx);
 
 struct Middleware {
-  MiddlewareFn middleware_fn;
   String name;
+  MiddlewareFn middleware_fn;
+  MiddlewareInvocation invocation;
 }
 
 fn void Server.start(
@@ -162,14 +176,35 @@ fn Route *Server.find_route(&this, String pathname, HttpVerb method) {
   return null;
 }
 
-fn void *Server.use(&this, MiddlewareFn middleware_fn){
+// TODO: add middleware
+fn void *Server.use(&this, MiddlewareFn middleware_fn, MiddlewareInvocation invocation){
   Middleware mid = {
     .middleware_fn = middleware_fn,
-    .name = "",
+    .invocation = invocation,
   };
   this.middleware.push(mid);
   return null;
 }
+
+alias ListMiddleware = List {Middleware};
+
+fn ListMiddleware Server.find_middleware(
+  &this,
+  MiddlewareInvocation invocation
+){
+
+  ListMiddleware list_middleware;
+  list_middleware.init(mem);
+  // @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
+    foreach (i, middleware : this.middleware.to_array(&allocator::LIBC_ALLOCATOR)) {
+      if (middleware.invocation == MiddlewareInvocation.ALL || middleware.invocation == invocation) {
+          list_middleware.push(middleware);
+      };
+    };
+  // };
+  return list_middleware;
+}
+
 
 // max header size 
 const ulong MAX_READ_SIZE = /* 5 MiB */ 1024 * 1024 * 5;
@@ -205,13 +240,8 @@ fn int process_req(void *arg) {
     }
   }
 
-  io::print("Output of bytes.str_view(): \n");
-  io::print(bytes.str_view());
-  io::print("\nEnd of bytes.str_view(): \n");
-
   String header_string = bytes.str_view();
-  String[] header_list =
-      header_string.split(&allocator::LIBC_ALLOCATOR, "\n", 0, true);
+  String[] header_list = header_string.split(&allocator::LIBC_ALLOCATOR, "\n", 0, true);
 
   Request req;
   req.headers.init(&allocator::LIBC_ALLOCATOR);
@@ -219,28 +249,41 @@ fn int process_req(void *arg) {
   foreach (i, header : header_list) {
     if (header.trim().len != 0) {
       if (header.contains(":")) {
-        String[] header_key_val =
-            header.split(&allocator::LIBC_ALLOCATOR, ":", 2);
-        // defer { allocator::free(&allocator::LIBC_ALLOCATOR,
-        // header_key_val);
-        // }
+        String[] header_key_val = header.split(&allocator::LIBC_ALLOCATOR, ":", 2);
         req.headers.set(header_key_val[0], header_key_val[1]);
       }
     }
   }
 
-  // TODO: parse cookies on a good day
-
+  // Header info
   String[] req_info = header_list[0].split(&allocator::LIBC_ALLOCATOR, " ");
   req.method = string_to_http_verb(req_info[0]);
   req.pathname = req_info[1];
 
+  // Start middleware
+  MiddlewareCtx ctx = {
+    .pathname = req.pathname,
+    .method = req.method,
+    .headers = header_list,
+    .request_type = RequestType.INCOMING,
+  };
+
+  ListMiddleware middleware = server.find_middleware(MiddlewareInvocation.BEFORE);
+  io::printf("Middleware count at start: %d\n", middleware.len());
+  defer middleware.free();
+
+  foreach (i, mid : middleware) {
+    mid.middleware_fn(ctx);
+  }
+
+  // Find Route
   Route *route = server.find_route(req.pathname, req.method);
   Response response = {
       .status = 0,
       .status_text = StatusText.CONTINUE,
       .content_type = ContentType.HTML,
   };
+
   if (route) {
     response = route.handler_fn(req);
   } else {
@@ -261,6 +304,8 @@ fn int process_req(void *arg) {
     };
   }
 
+  // FIX: server resposne time at runtime
+
   @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
     String content = string::format(
         &allocator::LIBC_ALLOCATOR,
@@ -279,6 +324,13 @@ fn int process_req(void *arg) {
     if (catch err = send) {
       io::printn(err);
       return 1;
+    }
+
+    ctx.request_type = RequestType.OUTGOING;
+    middleware = server.find_middleware(MiddlewareInvocation.AFTER);
+    io::printf("Middleware count at end: %d\n", middleware.len());
+    foreach (i, mid : middleware) {
+      mid.middleware_fn(ctx);
     }
     return 0;
   };
