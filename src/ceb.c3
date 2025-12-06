@@ -52,6 +52,7 @@ struct MiddlewareCtx {
   HttpVerb method;
   String[] headers;
   RequestType request_type;
+  usz[] body;
 }
 
 alias MiddlewareFn = fn void(MiddlewareCtx);
@@ -202,28 +203,53 @@ fn int process_req(void *arg) {
   DString bytes;
   bytes.init(&allocator::LIBC_ALLOCATOR, 256);
 
+  DString data_bytes;
+  data_bytes.init(&allocator::LIBC_ALLOCATOR, 256);
+
+
   defer {
     socket.close() !!;
     bytes.free();
   };
 
   char[256] buffer;
+  usz data_start = 0;
+  bool has_more_data = false;
+  int iteration = 0;
 
-  while (try usz bytes_read = socket.read(&buffer)) {
-    String header_temp_data = (String)buffer[:bytes_read];
-    if (try usz header_end = header_temp_data.index_of("\r\n\r\n")) {
+  while (try usz bytes_read = socket.read(&buffer)) 
+  {
+    // io::printf("Iteration: %d\n", iteration++);
+    // io::printf("bytes_read: %d\n",  bytes_read);
+
+    String temp_data = (String)buffer[:bytes_read];
+    if (try usz header_end = temp_data.index_of("\r\n\r\n")) 
+    {
       bytes.append(buffer[:header_end]);
+      data_start = header_end + 4;
+      // io::printf("data_start: %d bytes_read: %d header_end: %d\n", data_start, bytes_read, header_end);
+      // io::printf("data_start == bytes_read: %d\n",data_start == bytes_read);
+      // io::printf("bytes_read < 256: %d\n", bytes_read < 256);
+
+      if(data_start == bytes_read && bytes_read < 256) // if no data after header end
+      {
+        io::printn("DOES NOT have more data");
+        data_bytes.append(buffer[data_start..]);
+      } else {
+        io::printn("Should have more data");
+        data_bytes.append(buffer[data_start..]);
+        has_more_data= true;
+      }
       break;
     }
-    bytes.append(header_temp_data);
+    bytes.append(temp_data);
     if (bytes.len() >= MAX_READ_SIZE) {
       return 1;
     };
     if (bytes_read < 256) {
       break;
-    }
+    };
   }
-
   String header_string = bytes.str_view();
   String[] header_list = header_string.split(&allocator::LIBC_ALLOCATOR, "\n", 0, true);
 
@@ -253,7 +279,6 @@ fn int process_req(void *arg) {
   };
 
   ListMiddleware middleware = server.find_middleware(MiddlewareInvocation.BEFORE);
-  io::printf("Middleware count at start: %d\n", middleware.len());
   defer middleware.free();
 
   foreach (i, mid : middleware) {
@@ -267,6 +292,42 @@ fn int process_req(void *arg) {
       .status_text = StatusText.CONTINUE,
       .content_type = ContentType.HTML,
   };
+
+  bool expect_100_continue = false;
+  foreach (index, header : header_list)
+  {
+    String[] header_key_val = header.split(&allocator::LIBC_ALLOCATOR, ":", 2);
+    if(header_key_val[0] == "Expect")
+    {
+      expect_100_continue=true;
+      break;
+    };
+  }
+
+  if(has_more_data || expect_100_continue)
+  {
+    if(expect_100_continue)
+    {
+      String agree = "HTTP/1.1 100 Continue\r\n\r\n"; 
+      usz ? send = socket.write(agree);
+      if (catch err = send) {
+        io::printn(err);
+        return 1;
+      }
+    }
+    while (try usz bytes_read = socket.read(&buffer))
+    {
+      if(bytes_read == 0)
+      {
+        break;
+      }
+      data_bytes.append(buffer[:bytes_read]);
+      if(bytes_read < 256)
+      {
+        break;
+      }
+    };
+  }
 
   if (route) {
     response = route.handler_fn(req);
@@ -312,10 +373,10 @@ fn int process_req(void *arg) {
 
     ctx.request_type = RequestType.OUTGOING;
     middleware = server.find_middleware(MiddlewareInvocation.AFTER);
-    io::printf("Middleware count at end: %d\n", middleware.len());
     foreach (i, mid : middleware) {
       mid.middleware_fn(ctx);
     }
+
     return 0;
   };
 }

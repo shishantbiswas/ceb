@@ -54,7 +54,7 @@ fn Response aboutHandler(Request req) {
 }
 
 fn void logger(MiddlewareCtx ctx){
-  io::printf("Middleware Request: %s at path '%s'\n",ctx.request_type.str_val, ctx.pathname);
+  io::printf("Logger: %s at path '%s'\n",ctx.request_type.str_val, ctx.pathname);
 }
 
 fn Middleware loggerMiddleware() {
@@ -85,13 +85,14 @@ fn int main() {
         .invocation = MiddlewareInvocation.AFTER,
       });
    */
-  server.use(loggerMiddleware());
+  // server.use(loggerMiddleware());
 
   // Register routes
   server
     .get("/", (HandlerFn)&homeHandler)
     .post("/", (HandlerFn)&homeHandler)
-    .get("/about", (HandlerFn)&aboutHandler);
+    .get("/about", (HandlerFn)&aboutHandler)
+    .post("/about", (HandlerFn)&aboutHandler);
 
   io::printf("%d handler were registered\n", server.routes.len());
   io::printf("%d middleware were registered\n", server.middleware.len());
