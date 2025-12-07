@@ -8,6 +8,9 @@ import std::core::mem::allocator;
 import std::core::string;
 import std::io::file;
 
+import std::time;
+// import std::time::datetime;
+
 import ceb::enums;
 
 struct Server {
@@ -344,18 +347,26 @@ fn int process_req(void *arg) {
     };
   }
 
+	TzDateTime dt = datetime::now().to_local();
+
+  String date = datetime::format(
+    &allocator::LIBC_ALLOCATOR,
+    DateTimeFormat.RFC3339,
+    dt
+  );
+
+  io::printn(date);
+
   // FIX: add correct time at the time of response for runtime
     String content = string::format(
         &allocator::LIBC_ALLOCATOR,
         "HTTP/1.1 %d %s\r\n"
         "Date: %s\r\n"
         "Server: CEB/0.1.1\r\n"
-        "Last-Modified: Fri,24 Oct 2025 10:15:30 GMT\r\n"
         "Content-Length: %d\r\n"
         "Content-Type: %s\r\n"
-        "Connection: close\r\n\r\n"
         "%s",
-        response.status, response.status_text, response.data.len(),
+        response.status, response.status_text, date, response.data.len(),
         response.content_type, response.data.str_view(),
     );
     usz ? send = socket.write(content);
