@@ -155,17 +155,14 @@ fn Server *Server.delete(&this, String path, HandlerFn handler_fn) {
 }
 
 fn Route *Server.find_route(&this, String pathname, HttpVerb method) {
-  @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
     foreach (i, route : this.routes.to_array(&allocator::LIBC_ALLOCATOR)) {
       if (route.path == pathname && route.method == method) {
         return &this.routes[i];
       };
     };
-  };
   return null;
 }
 
-// TODO: add middleware
 fn void *Server.use(&this, Middleware middleware_config){
   this.middleware.push(middleware_config);
   return null;
@@ -180,13 +177,11 @@ fn ListMiddleware Server.find_middleware(
 
   ListMiddleware list_middleware;
   list_middleware.init(mem);
-  // @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
     foreach (i, middleware : this.middleware.to_array(&allocator::LIBC_ALLOCATOR)) {
       if (middleware.invocation == MiddlewareInvocation.ALL || middleware.invocation == invocation) {
           list_middleware.push(middleware);
       };
     };
-  // };
   return list_middleware;
 }
 
@@ -195,7 +190,7 @@ fn ListMiddleware Server.find_middleware(
 const ulong MAX_READ_SIZE = /* 5 MiB */ 1024 * 1024 * 5;
 
 fn int process_req(void *arg) {
-
+@pool_init(&allocator::LIBC_ALLOCATOR, 512){
   ThreadArgs *args = (ThreadArgs *)arg;
   TcpSocket *socket = args.socket;
   Server *server = args.server;
@@ -233,10 +228,10 @@ fn int process_req(void *arg) {
 
       if(data_start == bytes_read && bytes_read < 256) // if no data after header end
       {
-        io::printn("DOES NOT have more data");
+        // io::printn("DOES NOT have more data");
         data_bytes.append(buffer[data_start..]);
       } else {
-        io::printn("Should have more data");
+        // io::printn("Should have more data");
         data_bytes.append(buffer[data_start..]);
         has_more_data= true;
       }
@@ -349,13 +344,11 @@ fn int process_req(void *arg) {
     };
   }
 
-  // FIX: server resposne time at runtime
-
-  @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
+  // FIX: add correct time at the time of response for runtime
     String content = string::format(
         &allocator::LIBC_ALLOCATOR,
         "HTTP/1.1 %d %s\r\n"
-        "Date: Mon,27 Oct 2025 08:30:00 GMT\r\n"
+        "Date: %s\r\n"
         "Server: CEB/0.1.1\r\n"
         "Last-Modified: Fri,24 Oct 2025 10:15:30 GMT\r\n"
         "Content-Length: %d\r\n"
@@ -378,7 +371,8 @@ fn int process_req(void *arg) {
     }
 
     return 0;
-  };
+  
+};
 }
 
 fn void handle_server_error(fault err) {

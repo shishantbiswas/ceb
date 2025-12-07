@@ -9,7 +9,7 @@ fn Response homeHandler(Request req) {
   html_data.init(&allocator::LIBC_ALLOCATOR, 256);
   defer html_data.free();
 
-  @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
+  // @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
     char[] ? file = file::load(&allocator::LIBC_ALLOCATOR, "index.html");
     if (catch excuse = file)
     {
@@ -20,7 +20,7 @@ fn Response homeHandler(Request req) {
       };
     }
     html_data.append(file);
-  };
+  // };
   return {
       .data = html_data,
       .content_type = ContentType.HTML,
@@ -33,7 +33,7 @@ fn Response aboutHandler(Request req) {
   html_data.init(&allocator::LIBC_ALLOCATOR, 256);
   defer html_data.free();
 
-  @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
+  // @pool_init(&allocator::LIBC_ALLOCATOR, 512) {
     char[] ? file = file::load(&allocator::LIBC_ALLOCATOR, "about.html");
     if (catch excuse = file)
     {
@@ -45,7 +45,7 @@ fn Response aboutHandler(Request req) {
       };
     }
     html_data.append(file);
-  };
+  // };
   return {
       .data = html_data,
       .content_type = ContentType.TXT,
