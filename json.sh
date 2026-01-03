@@ -1,4 +1,4 @@
-curl -X POST --json '{
+curl -v -X POST --json '{
 "email":"hello@example.com"
 "password":"hello"
 "name":"hello"

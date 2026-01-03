@@ -1,17 +1,5 @@
 module ceb::enums;
 
-
-enum HttpVerb : (int val, String str_val) {
-  GET     = {1, "GET"},
-  POST    = {2, "POST"},
-  PUT     = {3, "PUT"},
-  PATCH   = {4, "PATCH "},
-  DELETE  = {5, "DELETE" },
-  OPTIONS = {6, "OPTIONS"},
-  CONNECT = {7, "CONNECT"},
-  HEAD    = {8, "HEAD"},
-  TRACE   = {9, "TRACE"},
-}
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
 enum StatusCode : (int code, String message) {
   CONTINUE = {100, "Continue"},
@@ -88,7 +76,22 @@ enum ContentType : (String ext, String mime_type){
   AAC  = {".aac","audio/aac"},
   JSON = {".json","application/json"},
   HTML = {".html","text/html"},
-  TXT = {".txt","text/plain"}
+  TXT = {".txt","text/plain"},
+  CSS = {".css","text/css"},
+  JS = {".js","application/javascript"},
+  PNG = {".png","image/png"},
+  JPG = {".jpg","image/jpeg"},
+  BINARY = {".bin","application/octet-stream"},
+  JPEG = {".jpeg","image/jpeg"},
+  GIF = {".gif","image/gif"},
+  SVG = {".svg","image/svg+xml"},
+  XML = {".xml","application/xml"},
+  PDF = {".pdf","application/pdf"},
+  MP4 = {".mp4","video/mp4"},
+  MP3 = {".mp3","audio/mpeg"},
+  WAV = {".wav","audio/wav"},
+  ZIP = {".zip","application/zip"},
+  GZ = {".gz","application/gzip"}
   
 }
 
