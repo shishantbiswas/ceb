@@ -45,13 +45,13 @@ faultdef PROTOCOL_VIOLATION;  // bare LF, null bytes, etc.
 // }
 
 struct Request {
-  HttpVersion version;
-  headers::HeaderMap headers;
-  String pathname;
-  url::UrlQueryValues query;
-  url::Url url;
-  headers::HeaderMap trailers;
-  HttpVerb method;
+    HttpVersion version;
+    headers::HeaderMap headers;
+    String pathname;
+    url::UrlQueryValues query;
+    url::Url url;
+    headers::HeaderMap trailers;
+    HttpVerb method;
 }
 
 <* Incremental HTTP/1.1 parser *>

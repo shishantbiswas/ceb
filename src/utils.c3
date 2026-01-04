@@ -6,10 +6,9 @@ import std::io;
 
 fn Response read_file(String filename) {
   DString html_data;
-  html_data.init(mem);
-  defer html_data.free();
+  html_data.init(tmem);
 
-  char[] ? file = file::load(mem, filename);
+  char[] ? file = file::load(tmem, filename);
   if (catch excuse = file) {
     html_data.append("Internal Server Error");
     return {
@@ -27,7 +26,7 @@ fn Response read_file(String filename) {
   };
 }
 
-
+fn void static_serve_folder(String folder_name) {}
 
 fn HttpVerb string_to_http_verb(String verb) {
   switch (verb) {
