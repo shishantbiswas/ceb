@@ -13,7 +13,7 @@ import ceb::enums;
 import ceb::router;
 
 struct Server {
-  List{Route} routes;
+  Router router;
   List{Middleware} middleware;
   TcpServerSocket server;
   String host;
@@ -97,23 +97,14 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080,
         }
       }
 
-      List{String} pathlist;
-      pathlist.tinit();
-      defer pathlist.free();
-
-      foreach (i, route : this.routes.to_array(mem)) {
-        pathlist.push(route.path);
+      // Use the new router to handle the request
+      Response response;
+      if(try Response res = this.router.handle_request(p.request)){
+        response = res;
+      } else {
+        response = {
+        };
       }
-
-      bool ? is_dynamic = router::is_dynamic_path(p.request.pathname,
-                                              pathlist.to_array(mem));
-      if (catch err = is_dynamic) {
-        io::printn(err);
-        is_dynamic = false;
-      } 
-        io::printn(is_dynamic!!);
-
-      Response response = utils::read_file("index.html");
       defer response.data.free();
 
       DString content;
@@ -158,17 +149,12 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080,
 
 fn Server *Server.init(&self) {
   self.middleware.init(mem);
-  self.routes.init(mem);
+  self.router.init();
   return self;
 }
 
-fn Route *Server.find_route(&this, String pathname, HttpVerb method) {
-  foreach (i, route : this.routes.to_array(mem)) {
-    if (route.path == pathname && route.method == method) {
-      return &this.routes[i];
-    };
-  };
-  return null;
+fn RouteInfo * Server.find_route(&this, String pathname, HttpVerb method) {
+    return this.router.find_route(pathname, method);
 }
 
 fn void *Server.use(&this, Middleware middleware_config) {

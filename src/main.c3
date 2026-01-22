@@ -15,9 +15,9 @@ fn int main() {
   defer server.start();
 
   server
-      .get("/test/*", (HandlerFn)&aboutHandler);
+      .get("/test/*", (HandlerFn)&homeHandler)!!;
 
-  io::printf("%d handler were registered\n", server.routes.len());
+  io::printf("%d handler were registered\n", server.router.routes.len());
   io::printf("%d middleware were registered\n", server.middleware.len());
 
   return 0;
