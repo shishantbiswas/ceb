@@ -54,38 +54,47 @@ module ceb;
 
 
 
-fn void? Server.get(&self, String path, HandlerFn handler) {
-  self.router.add_route(path, HttpVerb.GET, handler)!!;
+fn Server *Server.get(&self, String path, HandlerFn handler) {
+  self.router.add_route(path, HttpVerb.GET, handler);
+  return self;
 }
 
-fn void? Server.post(&self, String path, HandlerFn handler) {
-  self.router.add_route(path, HttpVerb.POST, handler)!!;
+fn Server *Server.post(&self, String path, HandlerFn handler) {
+  self.router.add_route(path, HttpVerb.POST, handler);
+  return self;
 }
 
-fn void? Server.put(&self, String path, HandlerFn handler) {
-  self.router.add_route(path, HttpVerb.PUT, handler)!!;
+fn Server *Server.put(&self, String path, HandlerFn handler) {
+  self.router.add_route(path, HttpVerb.PUT, handler);
+  return self;
 }
 
-fn void? Server.patch(&self, String path, HandlerFn handler) {
-  self.router.add_route(path, HttpVerb.PATCH, handler)!!;
+fn Server *Server.patch(&self, String path, HandlerFn handler) {
+  self.router.add_route(path, HttpVerb.PATCH, handler);
+  return self;
 }
 
-fn void? Server.delete(&self, String path, HandlerFn handler) {
-  self.router.add_route(path, HttpVerb.DELETE, handler)!!;
+fn Server *Server.delete(&self, String path, HandlerFn handler) {
+  self.router.add_route(path, HttpVerb.DELETE, handler);
+  return self;
 }
 
-fn void? Server.options(&self, String path, HandlerFn handler) {
-  self.router.add_route(path, HttpVerb.OPTIONS, handler)!!;
+fn Server *Server.options(&self, String path, HandlerFn handler) {
+  self.router.add_route(path, HttpVerb.OPTIONS, handler);
+  return self;
 }
 
-fn void? Server.head(&self, String path, HandlerFn handler) {
-  self.router.add_route(path, HttpVerb.HEAD, handler)!!;
+fn Server *Server.head(&self, String path, HandlerFn handler) {
+  self.router.add_route(path, HttpVerb.HEAD, handler);
+  return self;
 }
 
-fn void? Server.connect(&self, String path, HandlerFn handler) {
-  self.router.add_route(path, HttpVerb.CONNECT, handler)!!;
+fn Server *Server.connect(&self, String path, HandlerFn handler) {
+  self.router.add_route(path, HttpVerb.CONNECT, handler);
+  return self;
 }
 
-fn void? Server.trace(&self, String path, HandlerFn handler) {
-  self.router.add_route(path, HttpVerb.TRACE, handler)!!;
+fn Server *Server.trace(&self, String path, HandlerFn handler) {
+  self.router.add_route(path, HttpVerb.TRACE, handler);
+  return self;
 }
