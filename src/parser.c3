@@ -11,6 +11,7 @@ import ceb::version;
 import std::io;
 import std::net::url;
 import std::core::string;
+import std::collections::map;
 
 <* Parser states for incremental parsing *>
 enum ParserState : char {
@@ -49,6 +50,7 @@ struct Request {
     headers::HeaderMap headers;
     String pathname;
     url::UrlQueryValues query;
+    HashMap{String, String} params;
     url::Url url;
     headers::HeaderMap trailers;
     HttpVerb method;
@@ -78,6 +80,7 @@ fn void Parser.init(&self, Allocator allocator = mem) {
     self.buffer.init(allocator, DEFAULT_MAX_REQUEST_SIZE, INITIAL_BUFFER_SIZE);
     self.request.headers.init(allocator);
     self.request.trailers.init(allocator);
+    self.request.params.init(allocator);
     self.bytes_parsed = 0;
     self.max_header_size = DEFAULT_MAX_HEADER_SIZE;
     self.max_request_size = DEFAULT_MAX_REQUEST_SIZE;
@@ -90,6 +93,7 @@ fn void Parser.free(&self) {
     self.buffer.free();
     self.request.headers.free();
     self.request.trailers.free();
+    self.request.params.free();
     self.chunked_parser.free();
 }
 
@@ -100,6 +104,7 @@ fn void Parser.reset(&self) {
     self.buffer.write_idx = 0;
     self.request.headers.clear();
     self.request.trailers.clear();
+    self.request.params.clear();
     self.bytes_parsed = 0;
     self.is_chunked = false;
     self.chunked_parser.reset();

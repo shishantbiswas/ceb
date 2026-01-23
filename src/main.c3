@@ -1,5 +1,6 @@
 module main;
 import std::io;
+import std::collections::map;
 
 import ceb;
 import ceb::enums;
@@ -8,6 +9,31 @@ fn Response homeHandler(Request req) { return utils::read_file("index.html"); }
 
 fn Response aboutHandler(Request req) { return utils::read_file("about.html"); }
 
+fn Response userHandler(Request req) {
+  DString body;
+  body.init(mem);
+  body.append("User ID: ");
+  if (req.params.has_key("id")) {
+    body.append(req.params["id"] !!);
+  } else {
+    body.append("unknown");
+  }
+  return {.status = 200,
+          .status_text = StatusText.OK,
+          .data = body,
+          .content_type = ContentType.TXT};
+}
+
+fn Response apiHandler(Request req) {
+  DString body;
+  body.init(mem);
+  body.append("API Catch-all");
+  return {.status = 200,
+          .status_text = StatusText.OK,
+          .data = body,
+          .content_type = ContentType.TXT};
+}
+
 fn int main() {
   Server server;
   server.init();
@@ -15,10 +41,11 @@ fn int main() {
   defer server.start();
 
   server.get("/", (HandlerFn)&homeHandler)
-  		.get("/test/*", (HandlerFn)&aboutHandler);
+      .get("/about", (HandlerFn)&aboutHandler)
+      .get("/user/:id", (HandlerFn)&userHandler)
+      .get("/api/proxy/*", (HandlerFn)&apiHandler);
 
-  io::printf("%d handler were registered\n", server.router.routes.len());
-  io::printf("%d middleware were registered\n", server.middleware.len());
+  io::printn("Server initialized. Routes added.");
 
   return 0;
 }
