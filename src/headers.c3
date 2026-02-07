@@ -129,11 +129,11 @@ fn bool is_valid_header_value(String value) {
  *>
 fn void? HeaderMap.add(&self, String name, String value) {
     if (!is_valid_header_name(name)) {
-        return INVALID_HEADER_NAME?;
+        return INVALID_HEADER_NAME~;
     }
 
     if (!is_valid_header_value(value)) {
-        return INVALID_HEADER_VALUE?;
+        return INVALID_HEADER_VALUE~;
     }
 
     String normalized = normalize_header_name(name, &self.arena);
@@ -145,18 +145,18 @@ fn void? HeaderMap.add(&self, String name, String value) {
 
         // Empty string is invalid
         if (trimmed.len == 0) {
-            return INVALID_CONTENT_LENGTH?;
+            return INVALID_CONTENT_LENGTH~;
         }
 
         // Check for negative sign (invalid per RFC 9112 §6.3)
         if (trimmed[0] == '-') {
-            return INVALID_CONTENT_LENGTH?;
+            return INVALID_CONTENT_LENGTH~;
         }
 
         // Validate all characters are digits
         foreach (char c : trimmed) {
             if (!c.is_digit()) {
-                return INVALID_CONTENT_LENGTH?;
+                return INVALID_CONTENT_LENGTH~;
             }
         }
 
@@ -166,12 +166,12 @@ fn void? HeaderMap.add(&self, String name, String value) {
             String? existing = self.get(HEADER_CONTENT_LENGTH);
             if (catch err = existing) {
                 // Shouldn't happen since we just checked has()
-                return err?;
+                return err~;
             }
             String existing_trimmed = existing.trim();
             if (existing_trimmed != trimmed) {
                 // Different Content-Length values = request smuggling attack
-                return MULTIPLE_CONTENT_LENGTH_MISMATCH?;
+                return MULTIPLE_CONTENT_LENGTH_MISMATCH~;
             }
             // Same value - OK per RFC, but don't need to store again
             return;
@@ -182,7 +182,7 @@ fn void? HeaderMap.add(&self, String name, String value) {
     if (normalized == HEADER_TRANSFER_ENCODING) {
         // Reject if already exists (multiple TE headers = obfuscation attack)
         if (self.has(HEADER_TRANSFER_ENCODING)) {
-            return INVALID_HEADER_VALUE?;
+            return INVALID_HEADER_VALUE~;
         }
 
         // Only accept "chunked" (no multiple codings, no whitespace tricks)
@@ -191,17 +191,17 @@ fn void? HeaderMap.add(&self, String name, String value) {
 
         // Reject anything that's not exactly "chunked"
         if (lower != "chunked") {
-            return INVALID_HEADER_VALUE?;
+            return INVALID_HEADER_VALUE~;
         }
 
         // Reject if Content-Length also present
         if (self.has(HEADER_CONTENT_LENGTH)) {
-            return TRANSFER_ENCODING_WITH_CONTENT_LENGTH?;
+            return TRANSFER_ENCODING_WITH_CONTENT_LENGTH~;
         }
     }
     if (normalized == HEADER_CONTENT_LENGTH) {
         if (self.has(HEADER_TRANSFER_ENCODING)) {
-            return TRANSFER_ENCODING_WITH_CONTENT_LENGTH?;
+            return TRANSFER_ENCODING_WITH_CONTENT_LENGTH~;
         }
     }
 
@@ -213,7 +213,7 @@ fn String? HeaderMap.get(&self, String name) {
     String normalized = normalize_header_name(name, &self.arena);
     String*? value_ref = self.headers.get_ref(normalized);
     if (catch err = value_ref) {
-        return HEADER_NOT_FOUND?;
+        return HEADER_NOT_FOUND~;
     }
     return *value_ref;
 }
@@ -250,7 +250,7 @@ fn void HeaderMap.clear(&self) {
 fn usz? HeaderMap.get_content_length(&self) {
     String? value = self.get(HEADER_CONTENT_LENGTH);
     if (catch err = value) {
-        return err?;
+        return err~;
     }
 
     // Trim whitespace (RFC allows OWS around field value)
@@ -258,24 +258,24 @@ fn usz? HeaderMap.get_content_length(&self) {
 
     // Empty string is invalid
     if (trimmed.len == 0) {
-        return INVALID_CONTENT_LENGTH?;
+        return INVALID_CONTENT_LENGTH~;
     }
 
     // Check for negative sign (invalid per RFC 9112 §6.3)
     if (trimmed[0] == '-') {
-        return INVALID_CONTENT_LENGTH?;
+        return INVALID_CONTENT_LENGTH~;
     }
 
     // Validate all characters are digits
     foreach (char c : trimmed) {
         if (!c.is_digit()) {
-            return INVALID_CONTENT_LENGTH?;
+            return INVALID_CONTENT_LENGTH~;
         }
     }
 
     // Parse as unsigned long (any parse error = invalid Content-Length)
     if (catch err = trimmed.to_ulong()) {
-        return INVALID_CONTENT_LENGTH?;
+        return INVALID_CONTENT_LENGTH~;
     }
     ulong result = trimmed.to_ulong()!;
 
@@ -322,7 +322,7 @@ fn HeaderField? parse_header_line(String line) {
     // Find colon separator
     usz? colon_pos = line.index_of_char(':');
     if (catch err = colon_pos) {
-        return INVALID_HEADER_VALUE?;
+        return INVALID_HEADER_VALUE~;
     }
 
     String name_raw = line[0:colon_pos];
@@ -333,18 +333,18 @@ fn HeaderField? parse_header_line(String line) {
     if (name_raw.len > 0) {
         char last_char = name_raw[name_raw.len - 1];
         if (last_char == ' ' || last_char == '\t') {
-            return INVALID_HEADER_NAME?;
+            return INVALID_HEADER_NAME~;
         }
     }
 
     String name = name_raw.trim();
 
     if (!is_valid_header_name(name)) {
-        return INVALID_HEADER_NAME?;
+        return INVALID_HEADER_NAME~;
     }
 
     if (!is_valid_header_value(value)) {
-        return INVALID_HEADER_VALUE?;
+        return INVALID_HEADER_VALUE~;
     }
 
     return (HeaderField){ name, value };

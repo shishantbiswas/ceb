@@ -1,0 +1,5 @@
+add:
+  - raw binary support streaming in response
+  - request parsing for cookies, formdata
+  - utils for handling formdata, cookies, similar to headers like headers.get("accept")
+  - serve static function to serve entire folder

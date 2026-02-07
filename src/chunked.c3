@@ -80,7 +80,7 @@ fn void ChunkedParser.reset(&self) {
  *>
 fn usz? parse_chunk_size(char[] line) {
     if (line.len == 0) {
-        return INVALID_CHUNK_SIZE?;
+        return INVALID_CHUNK_SIZE~;
     }
 
     // Find semicolon (chunk extension separator) or end of line
@@ -112,12 +112,12 @@ fn usz? parse_chunk_size(char[] line) {
         } else if (c >= 'A' && c <= 'F') {
             digit_value = (usz)(c - 'A' + 10);
         } else {
-            return INVALID_CHUNK_SIZE?;
+            return INVALID_CHUNK_SIZE~;
         }
 
         // Check for overflow
         if (chunk_size > (usz.max / 16u)) {
-            return CHUNK_TOO_LARGE?;
+            return CHUNK_TOO_LARGE~;
         }
 
         chunk_size = chunk_size * 16 + digit_value;
@@ -149,19 +149,19 @@ fn bool? ChunkedParser.feed(&self, char[] data) {
 
             case CHUNK_SIZE_LF:
                 if (c != '\n') {
-                    return INVALID_CHUNK_FORMAT?;
+                    return INVALID_CHUNK_FORMAT~;
                 }
 
                 // Parse chunk size
                 char[] size_line = self.chunk_size_buffer.array_view();
                 usz? chunk_size = parse_chunk_size(size_line);
                 if (catch err = chunk_size) {
-                    return err?;
+                    return err~;
                 }
 
                 // Check max chunk size
                 if (chunk_size > self.max_chunk_size) {
-                    return CHUNK_TOO_LARGE?;
+                    return CHUNK_TOO_LARGE~;
                 }
 
                 self.current_chunk_size = chunk_size;
@@ -197,14 +197,14 @@ fn bool? ChunkedParser.feed(&self, char[] data) {
 
             case CHUNK_DATA_CR:
                 if (c != '\r') {
-                    return INVALID_CHUNK_FORMAT?;
+                    return INVALID_CHUNK_FORMAT~;
                 }
                 self.state = ChunkedState.CHUNK_DATA_LF;
                 i++;
 
             case CHUNK_DATA_LF:
                 if (c != '\n') {
-                    return INVALID_CHUNK_FORMAT?;
+                    return INVALID_CHUNK_FORMAT~;
                 }
                 // Ready for next chunk
                 self.state = ChunkedState.CHUNK_SIZE;
@@ -228,7 +228,7 @@ fn bool? ChunkedParser.feed(&self, char[] data) {
                     // Parse trailer header
                     headers::HeaderField? field = headers::parse_header_line(line);
                     if (catch err = field) {
-                        return INVALID_CHUNK_FORMAT?;
+                        return INVALID_CHUNK_FORMAT~;
                     }
 
                     // Copy strings to arena (chunk_size_buffer will be cleared)
@@ -243,7 +243,7 @@ fn bool? ChunkedParser.feed(&self, char[] data) {
                     i += 2;  // Skip CRLF
                 } else if (c == '\n') {
                     // Bare LF - security violation
-                    return INVALID_CHUNK_FORMAT?;
+                    return INVALID_CHUNK_FORMAT~;
                 } else {
                     // Accumulate trailer header line
                     self.chunk_size_buffer.push(c);

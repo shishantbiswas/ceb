@@ -1,6 +1,6 @@
 v0.1.2
 - Testing using ab (ApacheBench) in apache_test.sh
-- Route handlerFn no longer needs @pool_init (FUCK YEAH!)
+- Route handlerFn no longer needs @pool_init
 - Added support for file upload
 - Utilities (utils.c3) added
 - Added current time in response header 

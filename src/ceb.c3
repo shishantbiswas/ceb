@@ -71,7 +71,7 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080,
     return;
   };
   this.server = server;
-  io::printf("Server running at port: %d\n", port);
+  io::printf("Server running at port: http://%s:%d\n", host, port);
   while (true) {
     @pool() {
       TcpSocket ? socket = tcp::accept(&server);
@@ -99,11 +99,10 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080,
 
       // Use the new router to handle the request
       Response response;
-      if(try Response res = this.router.handle_request(p.request)){
+      if (try Response res = this.router.handle_request(p.request)) {
         response = res;
       } else {
-        response = {
-        };
+        response = {};
       }
       defer response.data.free();
 
@@ -153,8 +152,8 @@ fn Server *Server.init(&self) {
   return self;
 }
 
-fn RouteInfo * Server.find_route(&this, String pathname, HttpVerb method) {
-    return this.router.find_route(pathname, method);
+fn RouteInfo *Server.find_route(&this, String pathname, HttpVerb method) {
+  return this.router.find_route(pathname, method);
 }
 
 fn void *Server.use(&this, Middleware middleware_config) {

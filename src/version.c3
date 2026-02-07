@@ -24,30 +24,30 @@ const HttpVersion HTTP_3_0 = { 3, 0 };
 <* Parse HTTP version from string (e.g., "HTTP/1.1"). *>
 fn HttpVersion? parse(String version_str) {
     if (version_str.len < 8) {
-        return INVALID_VERSION?;
+        return INVALID_VERSION~;
     }
 
     // Check "HTTP/" prefix
     if (version_str[0] != 'H' || version_str[1] != 'T' ||
         version_str[2] != 'T' || version_str[3] != 'P' ||
         version_str[4] != '/') {
-        return INVALID_VERSION?;
+        return INVALID_VERSION~;
     }
 
     // Parse major version (single digit)
     if (!version_str[5].is_digit()) {
-        return INVALID_VERSION?;
+        return INVALID_VERSION~;
     }
     char major = version_str[5] - '0';
 
     // Check dot separator
     if (version_str[6] != '.') {
-        return INVALID_VERSION?;
+        return INVALID_VERSION~;
     }
 
     // Parse minor version (single digit)
     if (!version_str[7].is_digit()) {
-        return INVALID_VERSION?;
+        return INVALID_VERSION~;
     }
     char minor = version_str[7] - '0';
 

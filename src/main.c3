@@ -40,12 +40,17 @@ fn int main() {
 
   defer server.start();
 
-  server.get("/", (HandlerFn)&homeHandler)
+  server
+      .get("/",
+           fn(Request req) => (Response){.status = 200,
+                                          .status_text = StatusText.OK,
+                                          .data = dstring::temp("Hello World"),
+                                          .content_type = ContentType.TXT})
       .get("/about", (HandlerFn)&aboutHandler)
       .get("/user/:id", (HandlerFn)&userHandler)
       .get("/api/proxy/*", (HandlerFn)&apiHandler);
 
-  io::printn("Server initialized. Routes added.");
+  io::printn("Server initialized");
 
   return 0;
 }

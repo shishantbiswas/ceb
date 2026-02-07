@@ -118,7 +118,7 @@ fn ParseResult? Parser.feed(&self, char[] data) {
     // Check size limits
     if (self.bytes_parsed + data.len > self.max_request_size) {
         self.state = ParserState.ERROR;
-        return PARSE_ERROR?;
+        return PARSE_ERROR~;
     }
 
     // Append data to buffer
@@ -154,7 +154,7 @@ fn ParseResult? Parser.process(&self) {
                 ParseResult? result = self.parse_request_line();
                 if (catch err = result) {
                     self.state = ParserState.ERROR;
-                    return err?;
+                    return err~;
                 }
                 if (result == ParseResult.MORE) {
                     return ParseResult.MORE;
@@ -165,7 +165,7 @@ fn ParseResult? Parser.process(&self) {
                 ParseResult? result = self.parse_headers();
                 if (catch err = result) {
                     self.state = ParserState.ERROR;
-                    return err?;
+                    return err~;
                 }
                 if (result == ParseResult.MORE) {
                     return ParseResult.MORE;
@@ -176,7 +176,7 @@ fn ParseResult? Parser.process(&self) {
                 ParseResult? result = self.parse_body();
                 if (catch err = result) {
                     self.state = ParserState.ERROR;
-                    return err?;
+                    return err~;
                 }
                 if (result == ParseResult.MORE) {
                     return ParseResult.MORE;
@@ -187,7 +187,7 @@ fn ParseResult? Parser.process(&self) {
                 return ParseResult.COMPLETE;
 
             case ParserState.ERROR:
-                return PARSE_ERROR?;
+                return PARSE_ERROR~;
         }
     }
 }
@@ -204,11 +204,11 @@ fn ParseResult? Parser.parse_request_line(&self) {
     if (catch err = crlf_pos) {
         // Propagate protocol violations (bare LF, null bytes)
         if (err == PROTOCOL_VIOLATION) {
-            return err?;
+            return err~;
         }
         // No CRLF yet, check size limit
         if (buffer_str.len > self.max_header_size) {
-            return HEADER_TOO_LARGE?;
+            return HEADER_TOO_LARGE~;
         }
         return ParseResult.MORE;
     }
@@ -219,17 +219,17 @@ fn ParseResult? Parser.parse_request_line(&self) {
     // Parse: METHOD SP TARGET SP HTTP/VERSION
     String[]? parts = line.tsplit(" ");
     if (catch err = parts) {
-        return INVALID_REQUEST_LINE?;
+        return INVALID_REQUEST_LINE~;
     }
 
     if (parts.len != 3) {
-        return INVALID_REQUEST_LINE?;
+        return INVALID_REQUEST_LINE~;
     }
 
     // Parse method
     HttpVerb? parsed_method = utils::string_to_http_verb(parts[0]);
     if (catch err = parsed_method) {
-        return INVALID_REQUEST_LINE?;
+        return INVALID_REQUEST_LINE~;
     }
     self.request.method = parsed_method;
 
@@ -238,7 +238,7 @@ fn ParseResult? Parser.parse_request_line(&self) {
 
     // Validate URI length (414 URI Too Long)
     if (parts[1].len > DEFAULT_MAX_URI_LENGTH) {
-        return REQUEST_TOO_LARGE?;
+        return REQUEST_TOO_LARGE~;
     }
 
     // Parse target as URL
@@ -252,7 +252,7 @@ fn ParseResult? Parser.parse_request_line(&self) {
     // Parse URL (use temp allocator for parsing, will copy what we need)
     url::Url? parsed_url = url::tparse(target_to_parse);
     if (catch err = parsed_url) {
-        return INVALID_REQUEST_LINE?;
+        return INVALID_REQUEST_LINE~;
     }
 
     // Extract path and query
@@ -269,13 +269,13 @@ fn ParseResult? Parser.parse_request_line(&self) {
     // Parse version
     HttpVersion? parsed_version = version::parse(parts[2]);
     if (catch err = parsed_version) {
-        return INVALID_REQUEST_LINE?;
+        return INVALID_REQUEST_LINE~;
     }
 
     // Validate version is supported (HTTP/1.1 only, optionally HTTP/1.0)
     // Return 505 HTTP Version Not Supported for other versions
     if (!parsed_version.is_http11() && !parsed_version.is_http10()) {
-        return version::UNSUPPORTED_VERSION?;
+        return version::UNSUPPORTED_VERSION~;
     }
 
     self.request.version = parsed_version;
@@ -296,7 +296,7 @@ fn ParseResult? Parser.parse_headers(&self) {
 
         // Check size limit
         if (buffer_str.len > self.max_header_size) {
-            return HEADER_TOO_LARGE?;
+            return HEADER_TOO_LARGE~;
         }
 
         // Look for CRLF
@@ -304,7 +304,7 @@ fn ParseResult? Parser.parse_headers(&self) {
         if (catch err = crlf_pos) {
         // Propagate protocol violations (bare LF, null bytes)
         if (err == PROTOCOL_VIOLATION) {
-            return err?;
+            return err~;
         }
             // No CRLF yet
             return ParseResult.MORE;
@@ -321,7 +321,7 @@ fn ParseResult? Parser.parse_headers(&self) {
         String line = buffer_str[0:crlf_pos];
         headers::HeaderField? field = headers::parse_header_line(line);
         if (catch err = field) {
-            return PARSE_ERROR?;
+            return PARSE_ERROR~;
         }
 
         // Add to header map
@@ -349,7 +349,7 @@ fn ParseResult? Parser.parse_body(&self) {
         if (buffer_data.len > 0) {
             bool? complete = self.chunked_parser.feed(buffer_data);
             if (catch err = complete) {
-                return PARSE_ERROR?;
+                return PARSE_ERROR~;
             }
 
             // Consume all fed data from buffer
@@ -372,7 +372,7 @@ fn ParseResult? Parser.parse_body(&self) {
 
     // Reject body that exceeds size limit (413 Payload Too Large)
     if (content_length > self.max_request_size) {
-        return REQUEST_TOO_LARGE?;
+        return REQUEST_TOO_LARGE~;
     }
 
     // Check if we have enough data
@@ -424,13 +424,13 @@ fn usz? find_crlf(String str) {
 
         // SECURITY: Reject null bytes
         if (c == 0) {
-            return PROTOCOL_VIOLATION?;
+            return PROTOCOL_VIOLATION~;
         }
 
         // SECURITY: Reject bare LF without CR
         if (c == '\n') {
             if (i == 0 || str[i - 1] != '\r') {
-                return PROTOCOL_VIOLATION?;
+                return PROTOCOL_VIOLATION~;
             }
             // This is the '\n' of a proper CRLF, return position of '\r'
             return i - 1;
@@ -445,6 +445,6 @@ fn usz? find_crlf(String str) {
     }
 
     // Not found yet - need more data
-    return PARSE_ERROR?;
+    return PARSE_ERROR~;
 }
 

@@ -40,6 +40,14 @@ fn HttpVerb string_to_http_verb(String verb) {
     return HttpVerb.PATCH;
   case "DELETE":
     return HttpVerb.DELETE;
+  case "OPTIONS":
+    return HttpVerb.OPTIONS;
+  case "TRACE":
+    return HttpVerb.TRACE;
+  case "CONNECT":
+    return HttpVerb.CONNECT;
+  case "HEAD":
+    return HttpVerb.HEAD;
   default:
     unreachable("ERROR: Unknow method");
   }
