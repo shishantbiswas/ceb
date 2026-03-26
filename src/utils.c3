@@ -26,8 +26,6 @@ fn Response read_file(String filename) {
   };
 }
 
-fn void static_serve_folder(String folder_name) {}
-
 fn HttpVerb string_to_http_verb(String verb) {
   switch (verb) {
   case "GET":
@@ -49,6 +47,6 @@ fn HttpVerb string_to_http_verb(String verb) {
   case "HEAD":
     return HttpVerb.HEAD;
   default:
-    unreachable("ERROR: Unknow method");
+    unreachable("ERROR: Unknown method");
   }
 }

@@ -5,10 +5,6 @@ import std::collections::map;
 import ceb;
 import ceb::enums;
 
-fn Response homeHandler(Request req) { return utils::read_file("index.html"); }
-
-fn Response aboutHandler(Request req) { return utils::read_file("about.html"); }
-
 fn Response userHandler(Request req) {
   DString body;
   body.init(mem);
@@ -41,12 +37,15 @@ fn int main() {
   defer server.start();
 
   server
-      .get("/",
+      .get("/heyo",
            fn(Request req) => (Response){.status = 200,
                                           .status_text = StatusText.OK,
                                           .data = dstring::temp("Hello World"),
                                           .content_type = ContentType.TXT})
-      .get("/about", (HandlerFn)&aboutHandler)
+      .get("/",
+           fn(Request req) => (Response)utils::read_file("public/index.html"))
+      .get("/about",
+           fn(Request req) => (Response)utils::read_file("public/about.html"))
       .get("/user/:id", (HandlerFn)&userHandler)
       .get("/api/proxy/*", (HandlerFn)&apiHandler);
 
