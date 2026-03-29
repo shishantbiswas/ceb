@@ -81,13 +81,13 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080, uint bac
 	event_loop::EventLoop loop = loop_opt;
 	defer loop.free();
 
-	async::tcp::TcpConnection*? server_opt = async::tcp::create(&loop);
+	tcp::TcpConnection*? server_opt = tcp::create(&loop);
 	if (catch err = server_opt)
 	{
 		io::eprintfn("Failed to create server");
 		return;
 	}
-	async::tcp::TcpConnection* server = server_opt;
+	tcp::TcpConnection* server = server_opt;
 	defer server.close();
 
 	server.bind(this.host, (ushort)this.port)!!;
@@ -100,96 +100,94 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080, uint bac
 
 struct ClientCtx
 {
-  Server* server;
-  parser::Parser parser;
+	Server* server;
+	parser::Parser parser;
 }
 
 fn char[] on_alloc(tcp::TcpConnection* conn, usz suggested_size, void* user_data)
 {
-  return mem::new_array(char, suggested_size);
+	return mem::new_array(char, suggested_size);
 }
 
 fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 {
-  @pool() {
-    ClientCtx* ctx = (ClientCtx*)user_data;
+	@pool()
+	{
+		ClientCtx* ctx = (ClientCtx*)user_data;
 
-    if (data.len == 0)
-    {
-      // EOF - client closed connection
-      ctx.parser.free();
-      free(ctx);
-      client.close();
-      return;
-    }
+		if (data.len == 0)
+		{
+			// EOF - client closed connection
+			ctx.parser.free();
+			free(ctx);
+			client.close();
+			return;
+		}
 
-    parser::ParseResult? parse_opt = ctx.parser.feed(data);
-    if (catch err = parse_opt)
-    {
-      io::eprintfn("Parse error");
-      ctx.parser.free();
-      free(ctx);
-      client.close();
-      return;
-    }
+		parser::ParseResult? parse_opt = ctx.parser.feed(data);
+		if (catch err = parse_opt)
+		{
+			io::eprintfn("Parse error");
+			ctx.parser.free();
+			free(ctx);
+			client.close();
+			return;
+		}
 
-    if (parse_opt == parser::ParseResult.COMPLETE)
-    {
-      Server* server = ctx.server;
+		if (parse_opt == parser::ParseResult.COMPLETE)
+		{
+			Server* server = ctx.server;
 
-      TzDateTime ldt = datetime::now().to_local();
-      String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
+			TzDateTime ldt = datetime::now().to_local();
+			String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
 
-      Response response;
-      if (try Response res = server.router.handle_request(ctx.parser.request))
-      {
-        response = res;
-      }
-      else
-      {
-        response = {};
-      }
-      defer response.data.free();
+			Response response;
+			if (try Response res = server.router.handle_request(ctx.parser.request))
+			{
+				response = res;
+			}
+			else
+			{
+				response = { };
+			}
+			defer response.data.free();
 
-      DString content;
-      content.tinit();
+			DString content;
+			content.tinit();
 
-      content.appendf("HTTP/1.1 %d %s\r\n"
-                      "Server: CEB/0.1.1\r\n"
-                      "Date: %s\r\n"
-                      "Content-Length: %d\r\n"
-                      "Content-Type: %s\r\n\r\n"
-                      "%s",
-                      response.status, response.status_text, date,
-                      response.data.len(), response.content_type.mime_type,
-                      response.data.str_view());
+			content.appendf("HTTP/1.1 %d %s\r\n", response.status, response.status_text);
+			content.appendf("Server: CEB/0.1.1\r\n");
+			content.appendf("Date: %s\r\n", date);
+			content.appendf("Content-Length: %d\r\n", response.data.len());
+			content.appendf("Content-Type: %s\r\n\r\n", response.content_type.mime_type);
+			content.appendf("%s", response.data.str_view());
 
-      String content_str = content.str_view();
-      client.write((char[])content_str.ptr[:content_str.len], &on_write, ctx)!!;
-    }
-  };
+			String content_str = content.str_view();
+			client.write((char[])content_str.ptr[:content_str.len], &on_write, ctx)!!;
+		}
+	};
 }
 
 fn void on_write(async::tcp::TcpConnection* client, int status, void* user_data)
 {
-  ClientCtx* ctx = (ClientCtx*)user_data;
-  if (status != 0)
-  {
-    io::eprintfn("Write failed");
-  }
-  ctx.parser.free();
-  free(ctx);
-  client.close();
+	ClientCtx* ctx = (ClientCtx*)user_data;
+	if (status != 0)
+	{
+		io::eprintfn("Write failed");
+	}
+	ctx.parser.free();
+	free(ctx);
+	client.close();
 }
 
 fn void on_connection(async::tcp::TcpConnection* server, async::tcp::TcpConnection* client, void* user_data)
 {
-//   io::printfn("New client connected!");
-  ClientCtx* ctx = mem::new(ClientCtx);
-  ctx.server = (Server*)user_data;
-  ctx.parser.init();
+	// io::printfn("New client connected!");
+	ClientCtx* ctx = mem::new(ClientCtx);
+	ctx.server = (Server*)user_data;
+	ctx.parser.init();
 
-  client.start_read(&on_alloc, &on_read, ctx)!!;
+	client.start_read(&on_alloc, &on_read, ctx)!!;
 }
 
 fn Server* Server.init(&self)

@@ -80,7 +80,6 @@ enum ContentType : (String ext, String mime_type){
   CSS {".css","text/css"},
   JS {".js","application/javascript"},
   PNG {".png","image/png"},
-  JPG {".jpg","image/jpeg"},
   BINARY {".bin","application/octet-stream"},
   JPEG {".jpeg","image/jpeg"},
   GIF {".gif","image/gif"},
@@ -92,7 +91,6 @@ enum ContentType : (String ext, String mime_type){
   WAV {".wav","audio/wav"},
   ZIP {".zip","application/zip"},
   GZ {".gz","application/gzip"}
-  
 }
 
 enum MiddlewareInvocation : (int val, String str_val) {

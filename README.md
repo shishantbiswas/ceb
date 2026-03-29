@@ -1,6 +1,12 @@
+<div align="left">
+  <a href="#">
+    <img src="docs/assets/favicon.png" width="150" height="150" alt="Hono"/>
+  </a>
+</div>
+
 # CEB - C3 Hono-like Backend
 
-A lightweight single-threaded http server framework written in C3, inspired by Hono and express.js.
+A lightweight http server framework written in C3 powered by [c3io] and libuv, inspired by Hono and express.js.
 
 ## Features
 
@@ -16,24 +22,26 @@ module main;
 import std::io;
 import ceb;
 
-fn Response ? homeHandler(Request req) {
-    return {
-        .data = "Hello World",
-        .content_type = ContentType.TXT,
-        .status = 200,
-    };
-}
-
 fn int main() {
-    Server server;
-    server.routes.init(&allocator::LIBC_ALLOCATOR);
+  Server server;
+  server.init();
 
-    server.get("/", (HandlerFn)&homeHandler);
-    
-    io::printf("Server starting...\n");
-    server.start(); // defaults to localhost:8080
-    
-    return 0;
+  defer server.start();
+
+  server
+    .get("/heyo",
+      fn (
+        Request req
+      ) => {
+        .status = 200,
+        .status_text = StatusText.OK,
+        .data = dstring::temp("Hello World"),
+        .content_type = ContentType.TXT
+      }
+    )
+  
+  io::printf("Server starting...\n");  
+  return 0;
 }
 ```
 
@@ -69,9 +77,7 @@ The output binary will be available in the `build` directory.
 ## Development Status
 
 This project is in active development and should be considered alpha software. It is primarily intended for:
-- Learning C3 programming
 - Experimenting with web server concepts
 - Understanding low-level networking
-- Educational purposes
 
 Do not use this in production environments.
