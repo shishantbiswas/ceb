@@ -1,13 +1,26 @@
 {
   "$schema": "https://raw.githubusercontent.com/c3lang/c3c/refs/heads/master/resources/project_schema.json",
   "langrev": "1",
-  "warnings":  [ "no-unused" ],
-  "dependency-search-paths":  [ "lib" ],
-  "dependencies":  [  ],
-  "authors":  [ "Shishant Biswas <shishantbiswas@gmail.com>" ],
+  "warnings": [
+    "no-unused"
+  ],
+  "dependency-search-paths": [
+    "lib",
+    "lib/c3io.c3l"
+  ],
+  "dependencies": [
+    "c3io"
+  ],
+  "authors": [
+    "Shishant Biswas <shishantbiswas@gmail.com>"
+  ],
   "version": "0.1.1",
-  "sources":  [ "src/**" ],
-  "test-sources":  [ "test/**" ],
+  "sources": [
+    "src/**"
+  ],
+  "test-sources": [
+    "test/**"
+  ],
   "output": "build",
   "targets": {
     "main": {

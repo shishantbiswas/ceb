@@ -152,7 +152,7 @@ fn ListMiddleware Server.find_middleware(&this,
   ListMiddleware list_middleware;
   list_middleware.init(mem);
   foreach (i,
-           middleware : this.middleware.to_array(&allocator::LIBC_ALLOCATOR)) {
+           middleware : this.middleware.to_array(tmem)) {
     if (middleware.invocation == MiddlewareInvocation.ALL ||
         middleware.invocation == invocation) {
       list_middleware.push(middleware);
