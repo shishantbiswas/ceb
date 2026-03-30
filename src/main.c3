@@ -29,12 +29,26 @@ fn Response apiHandler(Request req)
 	return { .status = 200, .status_text = StatusText.OK, .data = body, .content_type = ContentType.TXT };
 }
 
+fn Response booboo(Request req)
+{
+	DString body;
+	body.tinit();
+	req.body();
+	body.append("Tell'em kendrick did it");
+  // io::printn(req.headers.headers.get("host")!!);
+  // foreach (header: req.headers.headers.tkeys()){
+  //   io::printn(header);
+  // }
+
+	return { .status = 200, .status_text = StatusText.OK, .data = body, .content_type = ContentType.TXT };
+}
+
 fn int main()
 {
 	Server server;
 	server.init();
 
-	defer server.start();
+	defer server.start("127.0.0.1", 3000);
 
 	server
     .get("/heyo",
@@ -52,7 +66,8 @@ fn int main()
     .get("/about",       fn (Request req) => utils::read_file("docs/about.html"))
     .get("/favicon.png", fn (Request req) => utils::read_file("docs/assets/favicon.png"))
     .get("/user/:id",    &userHandler)
-    .get("/api/proxy/*", &apiHandler);
+    .get("/api/proxy/*", &apiHandler)
+    .get("/booboo",      &booboo);
 
 	io::printn("Server initialized");
 

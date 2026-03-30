@@ -1,1 +1,1 @@
-curl --data-binary @video.webm http://localhost:8080 
+curl -v -H "Expect:" --data-binary @video.webm http://localhost:8080 

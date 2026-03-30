@@ -14,9 +14,9 @@ import std::time;
 import ceb::enums;
 import ceb::router;
 import ceb::parser;
-import std::time::datetime;
+import ceb::middleware;
 
-// Async imports
+// Async (uv) imports
 import async::event_loop;
 import async::tcp;
 
@@ -38,34 +38,9 @@ struct Response
 	ContentType content_type;
 }
 
-alias HandlerFn = fn Response(Request);
+alias HandlerFn = fn Response(parser::Request);
 
-struct Route
-{
-	String path;
-	HttpVerb method;
-	HandlerFn handler_fn;
-	String[] headers;
-}
-
-struct MiddlewareCtx
-{
-	String pathname;
-	HttpVerb method;
-	String[] headers;
-	RequestType request_type;
-	usz[] body;
-}
-
-alias MiddlewareFn = fn void(MiddlewareCtx);
-
-struct Middleware
-{
-	String name;
-	MiddlewareFn middleware_fn;
-	MiddlewareInvocation invocation;
-}
-
+// Entrypoint after user defined handler/middlewares
 fn void Server.start(&this, String host = "127.0.0.1", int port = 8080, uint backlog = 10000)
 {
 	this.host = host;
@@ -104,10 +79,7 @@ struct ClientCtx
 	parser::Parser parser;
 }
 
-fn char[] on_alloc(tcp::TcpConnection* conn, usz suggested_size, void* user_data)
-{
-	return mem::new_array(char, suggested_size);
-}
+fn char[] on_alloc(tcp::TcpConnection* conn, usz suggested_size, void* user_data) => mem::new_array(char, suggested_size);
 
 fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 {
@@ -127,7 +99,7 @@ fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 		parser::ParseResult? parse_opt = ctx.parser.feed(data);
 		if (catch err = parse_opt)
 		{
-			io::eprintfn("Parse error");
+			io::eprintfn("Parse error %s", err); // FIXME! blows up on binary data 
 			ctx.parser.free();
 			free(ctx);
 			client.close();
@@ -168,7 +140,7 @@ fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 	};
 }
 
-fn void on_write(async::tcp::TcpConnection* client, int status, void* user_data)
+fn void on_write(tcp::TcpConnection* client, int status, void* user_data)
 {
 	ClientCtx* ctx = (ClientCtx*)user_data;
 	if (status != 0)
@@ -180,7 +152,7 @@ fn void on_write(async::tcp::TcpConnection* client, int status, void* user_data)
 	client.close();
 }
 
-fn void on_connection(async::tcp::TcpConnection* server, async::tcp::TcpConnection* client, void* user_data)
+fn void on_connection(tcp::TcpConnection* server, tcp::TcpConnection* client, void* user_data)
 {
 	// io::printfn("New client connected!");
 	ClientCtx* ctx = mem::new(ClientCtx);
@@ -192,34 +164,15 @@ fn void on_connection(async::tcp::TcpConnection* server, async::tcp::TcpConnecti
 
 fn Server* Server.init(&self)
 {
-	self.middleware.init(tmem);
+	self.middleware.init(mem);
 	self.router.init();
 	return self;
 }
 
-fn RouteInfo* Server.find_route(&this, String pathname, HttpVerb method)
-{
-	return this.router.find_route(pathname, method);
-}
+fn RouteInfo* Server.find_route(&this, String pathname, HttpVerb method) => this.router.find_route(pathname, method);
 
-fn void* Server.use(&this, Middleware middleware_config)
+fn void* Server.use(&this, Middleware middleware_ctx)
 {
-	this.middleware.push(middleware_config);
+	this.middleware.push(middleware_ctx);
 	return null;
-}
-
-alias ListMiddleware = List{Middleware};
-
-fn ListMiddleware Server.find_middleware(&this, MiddlewareInvocation invocation)
-{
-	ListMiddleware list_middleware;
-	list_middleware.tinit();
-	foreach (i, middleware : this.middleware.to_array(tmem))
-	{
-		if (middleware.invocation == MiddlewareInvocation.ALL || middleware.invocation == invocation)
-		{
-			list_middleware.push(middleware);
-		}
-	}
-	return list_middleware;
 }

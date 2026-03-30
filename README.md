@@ -6,11 +6,18 @@
 
 # CEB - C3 Hono-like Backend
 
-A lightweight http server framework written in C3 powered by [c3io] and libuv, inspired by Hono and express.js.
+A lightweight http server framework written in C3 powered by [c3io](https://github.com/shishantbiswas/c3io) and [libuv](https://github.com/libuv/libuv), inspired by [Hono](https://github.com/honojs/hono) and [express.js]().
 
 ## Features
 
-- Simple routing system with HTTP method support (GET, POST, PUT, PATCH, DELETE)
+- Simple routing system with HTTP method support 
+  - GET
+  - POST
+  - PUT
+  - PATCH
+  - DELETE
+  - TRACE
+  - CONNECT
 - Content type handling (HTML, JSON, TXT, AAC)
 - Basic request/response handling
 - Static file serving capability

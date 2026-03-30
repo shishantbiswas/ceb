@@ -9,14 +9,14 @@ fn Response read_file(String filename)
 	DString html_data;
 	html_data.init(tmem);
 
-	Response response = { .data = html_data, .status_text = StatusText.OK };
+	Response response = { .data = html_data, .status_text = StatusText.OK,.content_type = ContentType.TXT };
 
 	if (!file::is_file(filename))
 	{
 		io::eprintfn("[ERROR]: Path '%s' is not a file", filename);
 		html_data.append("Internal Server Error");
 
-		response.content_type = ContentType.TXT;
+    response.data = html_data;
 		response.status = 500;
 		return response;
 	}
@@ -26,7 +26,7 @@ fn Response read_file(String filename)
 	{
 		html_data.append("Internal Server Error");
 
-		response.content_type = ContentType.TXT;
+    response.data = html_data;
 		response.status = 500;
 		return response;
 	}

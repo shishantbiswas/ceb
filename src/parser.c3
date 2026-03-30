@@ -3,15 +3,21 @@
  *
  * Incremental state machine parser for HTTP/1.1 requests per RFC 9112.
  * Handles streaming data that arrives in chunks.
+ *
+ * Body data is stored in a separate binary-safe buffer and accessed
+ * on-demand via Request.body() from handlers.
  *>
 module ceb::parser;
 
-import ceb;
-import ceb::version;
+
 import std::io;
 import std::net::url;
 import std::core::string;
 import std::collections::map;
+
+import ceb;
+import ceb::version;
+import ceb::headers;
 
 <* Parser states for incremental parsing *>
 enum ParserState : char {
@@ -34,17 +40,6 @@ faultdef PARSE_ERROR, INVALID_REQUEST_LINE, HEADER_TOO_LARGE, REQUEST_TOO_LARGE;
 faultdef PROTOCOL_VIOLATION;  // bare LF, null bytes, etc.
 
 // <* HTTP/1.1 request representation *>
-// struct Request {
-//     HttpVerb method;
-//     String target;              // Raw request target from request line
-//     url::Url url;               // Parsed URL (for absolute URIs)
-//     String path;                // Decoded path (for origin-form requests)
-//     url::UrlQueryValues query;  // Parsed query parameters
-//     HttpVersion version;
-//     headers::HeaderMap headers;
-//     headers::HeaderMap trailers; // Optional trailer headers (RFC 9112 §7.1.2)
-// }
-
 struct Request {
     HttpVersion version;
     headers::HeaderMap headers;
@@ -54,23 +49,37 @@ struct Request {
     url::Url url;
     headers::HeaderMap trailers;
     HttpVerb method;
+    Parser* _parser;                    // Back-reference for lazy body access
+}
+
+<* Get request body data on-demand. Returns raw binary-safe body bytes. *>
+fn char[] Request.body(&self) {
+    if (!self._parser) {
+        return (char[]){};
+    }
+    return self._parser.get_body();
 }
 
 <* Incremental HTTP/1.1 parser *>
 struct Parser {
     ParserState state;
-    io::ByteBuffer buffer;
+    io::ByteBuffer buffer;                  // For request line + headers only
+    io::ByteBuffer body_buffer;             // Separate buffer for body data (binary-safe)
     Request request;
     usz bytes_parsed;
     usz max_header_size;
     usz max_request_size;
-    bool is_chunked;                    // True if Transfer-Encoding: chunked
+    usz max_body_size;                      // Separate limit for body data
+    usz body_received;                      // Total body bytes accumulated
+    bool is_chunked;                        // True if Transfer-Encoding: chunked
+    bool headers_complete;                  // True once all headers are parsed
     chunked::ChunkedParser chunked_parser;  // For chunked encoding
 }
 
 // Parser configuration defaults
 const usz DEFAULT_MAX_HEADER_SIZE = 8 * 1024;        // 8KB
-const usz DEFAULT_MAX_REQUEST_SIZE = 1024 * 1024;    // 1MB
+const usz DEFAULT_MAX_REQUEST_SIZE = 1024 * 1024;    // 1MB (headers only)
+const usz DEFAULT_MAX_BODY_SIZE = 50 * 1024 * 1024;  // 50MB
 const usz DEFAULT_MAX_URI_LENGTH = 8 * 1024;         // 8KB
 const usz INITIAL_BUFFER_SIZE = 4 * 1024;            // 4KB
 
@@ -78,19 +87,25 @@ const usz INITIAL_BUFFER_SIZE = 4 * 1024;            // 4KB
 fn void Parser.init(&self, Allocator allocator = mem) {
     self.state = ParserState.START;
     self.buffer.init(allocator, DEFAULT_MAX_REQUEST_SIZE, INITIAL_BUFFER_SIZE);
+    self.body_buffer.init(allocator, DEFAULT_MAX_BODY_SIZE, INITIAL_BUFFER_SIZE);
     self.request.headers.init(allocator);
     self.request.trailers.init(allocator);
     self.request.params.init(allocator);
+    self.request._parser = self;
     self.bytes_parsed = 0;
     self.max_header_size = DEFAULT_MAX_HEADER_SIZE;
     self.max_request_size = DEFAULT_MAX_REQUEST_SIZE;
+    self.max_body_size = DEFAULT_MAX_BODY_SIZE;
+    self.body_received = 0;
     self.is_chunked = false;
+    self.headers_complete = false;
     self.chunked_parser.init(&self.request.trailers, allocator);
 }
 
 <* Free parser resources. *>
 fn void Parser.free(&self) {
     self.buffer.free();
+    self.body_buffer.free();
     self.request.headers.free();
     self.request.trailers.free();
     self.request.params.free();
@@ -102,26 +117,44 @@ fn void Parser.reset(&self) {
     self.state = ParserState.START;
     self.buffer.read_idx = 0;
     self.buffer.write_idx = 0;
+    self.body_buffer.read_idx = 0;
+    self.body_buffer.write_idx = 0;
     self.request.headers.clear();
     self.request.trailers.clear();
     self.request.params.clear();
     self.bytes_parsed = 0;
+    self.body_received = 0;
     self.is_chunked = false;
+    self.headers_complete = false;
     self.chunked_parser.reset();
 }
 
 <*
  * Feed data to parser. Returns parse result.
  * Call repeatedly as data arrives from network.
+ *
+ * After headers are complete, body data is routed to a separate
+ * binary-safe buffer with its own size limit.
  *>
 fn ParseResult? Parser.feed(&self, char[] data) {
-    // Check size limits
+    if (self.headers_complete) {
+        // Body data - route to separate body buffer (no protocol validation)
+        if (self.body_received + data.len > self.max_body_size) {
+            self.state = ParserState.ERROR;
+            return REQUEST_TOO_LARGE~;
+        }
+        self.body_buffer.write(data)!;
+        self.body_received += data.len;
+        return self.process()!;
+    }
+
+    // Header data - check against header size limits
     if (self.bytes_parsed + data.len > self.max_request_size) {
         self.state = ParserState.ERROR;
         return PARSE_ERROR~;
     }
 
-    // Append data to buffer
+    // Append data to header buffer
     self.buffer.write(data)!;
     self.bytes_parsed += data.len;
 
@@ -169,6 +202,19 @@ fn ParseResult? Parser.process(&self) {
                 }
                 if (result == ParseResult.MORE) {
                     return ParseResult.MORE;
+                }
+
+                // Headers complete - migrate any leftover buffer data to body buffer
+                self.headers_complete = true;
+                char[] remaining = self.get_readable_buffer();
+                if (remaining.len > 0) {
+                    if (remaining.len > self.max_body_size) {
+                        self.state = ParserState.ERROR;
+                        return REQUEST_TOO_LARGE~;
+                    }
+                    self.body_buffer.write(remaining)!;
+                    self.body_received += remaining.len;
+                    self.consume_bytes(remaining.len);
                 }
                 self.state = ParserState.BODY;
 
@@ -334,6 +380,7 @@ fn ParseResult? Parser.parse_headers(&self) {
 
 <*
  * Parse request body based on Content-Length or Transfer-Encoding.
+ * Body data lives in body_buffer (binary-safe, no protocol validation).
  * Returns MORE if incomplete, COMPLETE if done.
  *>
 fn ParseResult? Parser.parse_body(&self) {
@@ -344,16 +391,17 @@ fn ParseResult? Parser.parse_body(&self) {
             self.is_chunked = true;
         }
 
-        // Feed buffer data to chunked parser
-        char[] buffer_data = self.get_readable_buffer();
-        if (buffer_data.len > 0) {
+        // Feed unprocessed body buffer data to chunked parser
+        usz available = self.body_buffer.write_idx - self.body_buffer.read_idx;
+        if (available > 0) {
+            char[] buffer_data = self.body_buffer.bytes[self.body_buffer.read_idx : available];
             bool? complete = self.chunked_parser.feed(buffer_data);
             if (catch err = complete) {
                 return PARSE_ERROR~;
             }
 
-            // Consume all fed data from buffer
-            self.consume_bytes(buffer_data.len);
+            // Mark data as consumed from body buffer
+            self.body_buffer.read_idx += available;
 
             if (complete) {
                 return ParseResult.COMPLETE;
@@ -371,18 +419,16 @@ fn ParseResult? Parser.parse_body(&self) {
     }
 
     // Reject body that exceeds size limit (413 Payload Too Large)
-    if (content_length > self.max_request_size) {
+    if (content_length > self.max_body_size) {
         return REQUEST_TOO_LARGE~;
     }
 
-    // Check if we have enough data
-    char[] buffer_data = self.get_readable_buffer();
-    if (buffer_data.len < content_length) {
+    // Check if we have enough data in body buffer
+    if (self.body_received < content_length) {
         return ParseResult.MORE;
     }
 
-    // Body is ready (we don't consume it, just mark complete)
-    // The body data remains in buffer for application to read
+    // Body is ready
     return ParseResult.COMPLETE;
 }
 
@@ -400,15 +446,15 @@ fn char[] Parser.get_body(&self) {
         return self.chunked_parser.get_body();
     }
 
-    // Otherwise, return Content-Length bytes from buffer
+    // Otherwise, return Content-Length bytes from body buffer
     usz? content_length = self.request.headers.get_content_length();
     if (catch err = content_length) {
         return (char[]){};
     }
 
-    char[] buffer_data = self.get_readable_buffer();
-    usz body_len = content_length < buffer_data.len ? content_length : buffer_data.len;
-    return buffer_data[0:body_len];
+    usz available = self.body_buffer.write_idx;
+    usz body_len = content_length < available ? content_length : available;
+    return self.body_buffer.bytes[0:body_len];
 }
 
 <*
@@ -447,4 +493,3 @@ fn usz? find_crlf(String str) {
     // Not found yet - need more data
     return PARSE_ERROR~;
 }
-
