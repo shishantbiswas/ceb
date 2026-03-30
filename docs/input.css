@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography" {
+  className: wysiwyg;
+};
+
+body{
+  @apply max-w-5xl mx-auto wysiwyg;
+}

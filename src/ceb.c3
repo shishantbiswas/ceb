@@ -108,8 +108,20 @@ fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 
 		if (parse_opt == parser::ParseResult.COMPLETE)
 		{
+			// if(ctx.parser.header.headers.has("expect")){
+			// } // Expect: 100-continue
+
 			Server* server = ctx.server;
 
+			int middleware_index = 0;
+			ulong middleware_count = server.middleware.len();
+
+			Middleware *mds = &server.middleware[middleware_index];
+			mds.procedure({
+				.request = ctx.parser.request,
+				// .next 	 = middleware::create_next(++middleware_index, server)
+			});
+			
 			TzDateTime ldt = datetime::now().to_local();
 			String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
 

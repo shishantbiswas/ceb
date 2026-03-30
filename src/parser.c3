@@ -135,6 +135,11 @@ fn void Parser.reset(&self) {
  *
  * After headers are complete, body data is routed to a separate
  * binary-safe buffer with its own size limit.
+ *
+ * When headers are not yet complete, the incoming data may contain
+ * both header and body data (e.g. first read on a large POST).
+ * We scan for the end-of-headers marker (\r\n\r\n) to split the
+ * data and avoid checking body bytes against header size limits.
  *>
 fn ParseResult? Parser.feed(&self, char[] data) {
     if (self.headers_complete) {
@@ -148,24 +153,136 @@ fn ParseResult? Parser.feed(&self, char[] data) {
         return self.process()!;
     }
 
-    // Header data - check against header size limits
-    if (self.bytes_parsed + data.len > self.max_request_size) {
-        self.state = ParserState.ERROR;
-        return PARSE_ERROR~;
+    // Headers not yet complete - incoming data may contain both headers and body.
+    // We need to find the \r\n\r\n boundary to avoid checking body bytes
+    // against the header size limit.
+
+    // Try to find end-of-headers marker in the incoming data.
+    // We also need to account for the marker straddling the boundary between
+    // previously buffered data and the new data.
+    char[] header_data = data;
+    char[] body_data = (char[]){};
+
+    // Search for \r\n\r\n in the combined view (buffered tail + new data)
+    // The marker could straddle: up to 3 bytes of it may be in the existing buffer
+    usz? split_pos = self.find_header_end(data);
+
+    if (try pos = split_pos) {
+        // Found the end-of-headers boundary in the new data at offset `pos`.
+        // `pos` points to the first byte AFTER the \r\n\r\n sequence in `data`.
+        header_data = data[0 : pos];
+        if (pos < data.len) {
+            body_data = data[pos ..];
+        }
     }
 
-    // Append data to header buffer
-    self.buffer.write(data)!;
-    self.bytes_parsed += data.len;
+    // Check header portion against size limits
+    if (self.bytes_parsed + header_data.len > self.max_request_size) {
+        self.state = ParserState.ERROR;
+        return HEADER_TOO_LARGE~;
+    }
 
-    // Run state machine
-    return self.process()!;
+    // Append header portion to header buffer
+    if (header_data.len > 0) {
+        self.buffer.write(header_data)!;
+        self.bytes_parsed += header_data.len;
+    }
+
+    // Run state machine to process headers
+    ParseResult? result = self.process();
+    if (catch err = result) {
+        return err~;
+    }
+
+    // If headers are now complete and we have leftover body data,
+    // route it to the body buffer
+    if (self.headers_complete && body_data.len > 0) {
+        if (self.body_received + body_data.len > self.max_body_size) {
+            self.state = ParserState.ERROR;
+            return REQUEST_TOO_LARGE~;
+        }
+        self.body_buffer.write(body_data)!;
+        self.body_received += body_data.len;
+
+        // Continue processing (may complete body parsing)
+        return self.process()!;
+    }
+
+    return result;
 }
 
 <* Get readable buffer data as char array. *>
 fn char[] Parser.get_readable_buffer(&self) {
     usz readable = self.buffer.write_idx - self.buffer.read_idx;
     return self.buffer.bytes[self.buffer.read_idx : readable];
+}
+
+<*
+ * Find the end-of-headers marker (\r\n\r\n) in the new incoming data.
+ *
+ * Because the marker is 4 bytes, it may straddle the boundary between
+ * already-buffered data and the new chunk. We check up to 3 bytes from
+ * the tail of the existing buffer combined with the start of `data`.
+ *
+ * Returns the offset in `data` of the first byte AFTER the \r\n\r\n
+ * sequence, or a fault if the marker is not present in `data`.
+ *>
+fn usz? Parser.find_header_end(&self, char[] data) {
+    // Build a small overlap window from the tail of the existing buffer
+    // (up to 3 bytes) so we can detect markers that straddle the boundary.
+    char[3] tail_buf;
+    usz tail_len = 0;
+    usz buf_written = self.buffer.write_idx;
+    if (buf_written >= 3) {
+        tail_len = 3;
+    } else {
+        tail_len = buf_written;
+    }
+
+    if (tail_len > 0) {
+        for (usz i = 0; i < tail_len; i++) {
+            tail_buf[i] = self.buffer.bytes[buf_written - tail_len + i];
+        }
+    }
+
+    // Search the combined [tail | data] stream for \r\n\r\n.
+    // We use a simple 4-state match: track how many consecutive
+    // \r\n chars we've seen so far.
+    usz matched = 0;
+
+    // Pre-seed the matcher with the tail bytes
+    for (usz i = 0; i < tail_len; i++) {
+        char c = tail_buf[i];
+        if      (matched == 0 && c == '\r') { matched = 1; }
+        else if (matched == 1 && c == '\n') { matched = 2; }
+        else if (matched == 2 && c == '\r') { matched = 3; }
+        else if (matched == 3 && c == '\n') { matched = 4; }
+        else if (c == '\r')                 { matched = 1; }
+        else                                { matched = 0; }
+    }
+
+    // If already matched inside the tail that means the marker is entirely
+    // in the existing buffer - return offset 0 (all of data is body).
+    if (matched == 4) {
+        return 0;
+    }
+
+    // Now scan the new data bytes
+    for (usz i = 0; i < data.len; i++) {
+        char c = data[i];
+        if      (matched == 0 && c == '\r') { matched = 1; }
+        else if (matched == 1 && c == '\n') { matched = 2; }
+        else if (matched == 2 && c == '\r') { matched = 3; }
+        else if (matched == 3 && c == '\n') {
+            // Found! Return offset of byte after the \r\n\r\n in `data`
+            return i + 1;
+        }
+        else if (c == '\r')                 { matched = 1; }
+        else                                { matched = 0; }
+    }
+
+    // Not found in this chunk
+    return PARSE_ERROR~;
 }
 
 <* Consume N bytes from buffer. *>

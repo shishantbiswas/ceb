@@ -93,13 +93,6 @@ enum ContentType : (String ext, String mime_type){
   GZ {".gz","application/gzip"}
 }
 
-enum MiddlewareInvocation : (int val, String str_val) {
-  BEFORE {1, "BEFORE"},
-  AFTER {2, "AFTER"},
-  ALL {3, "ALL"},
-}
-
-
 enum RequestType : (int val, String str_val) {
   INCOMING {1, "INCOMING"},
   OUTGOING {2, "OUTGOING"},

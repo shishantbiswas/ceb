@@ -5,8 +5,7 @@
     "no-unused"
   ],
   "dependency-search-paths": [
-    "lib",
-    "lib/c3io.c3l"
+    "lib"
   ],
   "dependencies": [
     "c3io"
@@ -23,8 +22,14 @@
   ],
   "output": "build",
   "targets": {
-    "main": {
+    "web": {
+      "sources": [
+        "src/examples/demo.c3"
+      ],
       "type": "executable"
+    },
+    "ceb": {
+      "type": "static-lib"
     }
   },
   "cpu": "generic",

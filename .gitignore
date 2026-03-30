@@ -2,3 +2,4 @@ build/
 out/
 proto
 syntax-guide
+*node_modules*
