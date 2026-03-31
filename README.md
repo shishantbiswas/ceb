@@ -128,7 +128,8 @@ fn int main() {
 c3c build
 ```
 
-This will create `ceb.a` in the build directory.
+This will create `build/main` in the build directory.
+Which is the server executable and can be deployed on most linux system and docker based platforms.
 
 ## Project Structure
 
