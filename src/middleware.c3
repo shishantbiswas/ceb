@@ -5,46 +5,36 @@ import std::collections::list;
 import ceb::enums;
 import ceb::parser;
 
+/// Wraps the "advance chain" callback + its context pointer.
+/// Call `ctx.next.call()` inside your middleware to proceed to the
+/// next middleware (or the final route handler if none remain).
+alias FnPtr = fn void(void*);
+struct Next
+{
+	FnPtr fn_ptr;
+	void* user_data;
+}
 
+fn void Next.call(&self)
+{
+	if (self.fn_ptr != null)
+	{
+		self.fn_ptr(self.user_data);
+	}
+}
 
-// Private, used internally
-alias MiddlewareNextFn = fn void();
-
+/// Context passed to every middleware function.
 struct MiddlewareCtx
 {
 	Request request;
-	MiddlewareNextFn next;
+	Next    next;
 }
 
 alias MiddlewareFn = fn void(MiddlewareCtx);
 
-
-
 // Public interface
 struct Middleware
 {
-	String name;
+	String       name;
 	MiddlewareFn procedure;
 }
-
-// fn MiddlewareNextFn create_next(int index, Server* server)
-// {
-// 	Middleware* current_handler = &server.middleware[index];
-// 	return fn()=> current_handler.procedure();
-// }
-
-// alias ListMiddleware = List{Middleware};
-
-// fn ListMiddleware Server.find_middleware(&this, MiddlewareInvocation invocation)
-// {
-// 	ListMiddleware list_middleware;
-// 	list_middleware.tinit();
-// 	foreach (i, middleware : this.middleware.to_array(tmem))
-// 	{
-// 		if (middleware.invocation == MiddlewareInvocation.ALL || middleware.invocation == invocation)
-// 		{
-// 			list_middleware.push(middleware);
-// 		}
-// 	}
-// 	return list_middleware;
-// }

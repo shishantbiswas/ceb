@@ -1,11 +1,12 @@
 module main;
 import std::io;
 import std::collections::map;
+import std::time;
 
 import ceb;
 import ceb::enums;
 
-fn Response userHandler(Request req)
+fn Response userHandler(Request req, Server *server)
 {
 	DString body;
 	body.init(mem);
@@ -21,33 +22,59 @@ fn Response userHandler(Request req)
 	return { .status = 200, .status_text = StatusText.OK, .data = body, .content_type = ContentType.TXT };
 }
 
-fn Response apiHandler(Request req)
+fn Response apiHandler(Request req, Server *server)
 {
 	DString body;
 	body.init(mem);
 	body.append("API Catch-all");
+	io::printn(req.pathname);
 	return { .status = 200, .status_text = StatusText.OK, .data = body, .content_type = ContentType.TXT };
 }
 
-fn Response booboo(Request req)
+fn Response booboo(Request req, Server *server)
 {
 	DString body;
 	body.tinit();
-	req.body();
+	// req.body(); // req.body().json(), or req.body().form_data() or req.body() for raw binary
+	// maybe a validator is in need to check sql injections and such attacks
+	Response response = {
+		.status = 200,
+		.status_text = StatusText.OK, 
+		.content_type = ContentType.TXT
+	};
+	response.headers.tinit();
+	response.headers.set("token", "token_value");
+
 	body.append("Tell'em kendrick did it");
 	// io::printn(req.headers.get("host")!!);
-	foreach (header: req.headers.tkeys()){
-	  io::printn(header);
-	}
+	// foreach (header: req.headers.tkeys()){
+	//   io::printn(header);
+	// }
+	response.data = body;
+	return response;
+}
 
-	return { .status = 200, .status_text = StatusText.OK, .data = body, .content_type = ContentType.TXT };
+enum LogPrefix : (String direction){
+  OUTGOING {"-->"},
+  INCOMING {"<--"},
+  ERROR {"xxx"},
+}
+
+fn void logger_procedure(MiddlewareCtx ctx){
+
+	TzDateTime ldt = datetime::now().to_local();
+	String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
+
+	io::printfn("[LOGGER %s]: %s %s at path '%s'", date, LogPrefix.OUTGOING.direction, ctx.request.method.str_val ,ctx.request.pathname);
+	ctx.next.call();
+	io::printfn("[LOGGER %s]: %s %s at path '%s'", date, LogPrefix.INCOMING.direction, ctx.request.method.str_val, ctx.request.pathname);
 }
 
 // pass any config options you need for your custom middlware
 fn Middleware logger(){
 	return (Middleware){
 		.name = "static_serve",
-		.procedure = fn (MiddlewareCtx ctx)=>(void)io::printf("[LOGGER]: %s at path '%s'\n",ctx.request.method.str_val ,ctx.request.pathname),
+		.procedure = &logger_procedure,
 	};
 }
 
@@ -72,7 +99,8 @@ fn int main()
 		// })
 		.get("/heyo",
 		fn (
-			Request req
+			Request req,
+			Server *server
 		) => {
 			.status = 200,
 			.status_text = StatusText.OK,
@@ -81,10 +109,10 @@ fn int main()
 		}
 		)
 		// casting is optional from compiler version 0.7.10
-		.get("/",            fn (Request req) => utils::read_file("docs/index.html"))
-		.get("/about",       fn (Request req) => utils::read_file("docs/about.html"))
-		.get("/favicon.png", fn (Request req) => utils::read_file("docs/assets/favicon.png"))
-		.get("/output.css",  fn (Request req) => utils::read_file("docs/output.css"))
+		.get("/",            fn (Request req, Server *server) => utils::read_file(server, "docs/index.html"))
+		.get("/about",       fn (Request req, Server *server) => utils::read_file(server, "docs/about.html"))
+		.get("/favicon.png", fn (Request req, Server *server) => utils::read_file(server, "docs/assets/favicon.png"))
+		.get("/output.css",  fn (Request req, Server *server) => utils::read_file(server, "docs/output.css"))
 		.get("/user/:id",    &userHandler)
 		.get("/api/proxy/*", &apiHandler)
 		.get("/booboo",      &booboo)

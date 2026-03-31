@@ -1,5 +1,10 @@
 add:
   - raw binary support streaming in response
-  - request parsing for cookies, formdata
+  - parsing for cookies, formdata
   - utils for handling formdata, cookies, similar to headers like headers.get("accept")
-  - serve static function to serve entire folder
+  - json parsing
+  - formdata parsing
+  - async file handle libuv
+    - serve static function to serve entire folder
+  - async js fetch like http client libuv
+  - schema validator

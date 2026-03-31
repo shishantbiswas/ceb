@@ -299,7 +299,7 @@ fn RouteInfo* Router.find_route(&self, String pathname, HttpVerb method)
 }
 
 // Handle request
-fn Response? Router.handle_request(&self, Request request)
+fn Response? Router.handle_request(&self, Request request, Server *server)
 {
 	if (!self.method_tries.has_key(request.method.str_val))
 	{
@@ -335,7 +335,7 @@ fn Response? Router.handle_request(&self, Request request)
 			}
 		}
 
-		return route.handler_fn(request);
+		return route.handler_fn(request, server);
 	}
 	else
 	{

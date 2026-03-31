@@ -4,8 +4,10 @@ import ceb::enums;
 import ceb;
 import std::io;
 
+import async::file;
+
 // Handler
-fn Response read_file(String filename)
+fn Response read_file(Server *server, String filename)
 {
 	DString html_data;
 	html_data.init(tmem);
@@ -14,7 +16,7 @@ fn Response read_file(String filename)
 
 	if (!file::is_file(filename))
 	{
-		io::eprintfn("[ERROR]: Path '%s' is not a file", filename);
+		// io::eprintfn("[ERROR]: Path '%s' is not a file", filename);
 		html_data.append("Internal Server Error");
 
 		response.data = html_data;
