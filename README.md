@@ -4,25 +4,95 @@
   </a>
 </div>
 
+
 # CEB - C3 Hono-like Backend
 
-A lightweight http server framework written in C3 powered by [c3io](https://github.com/shishantbiswas/c3io) and [libuv](https://github.com/libuv/libuv), inspired by [Hono](https://github.com/honojs/hono) and [express.js]().
+A lightweight http server framework written in C3 powered by [c3io](https://github.com/shishantbiswas/c3io) and [libuv](https://github.com/libuv/libuv), inspired by [Hono](https://github.com/honojs/hono), [Elysia](https://elysiajs.com) and [express.js](https://expressjs.com).
 
 ## Features
 
 - Simple routing system with HTTP method support 
   - GET
-  - POST
   - PUT
+  - POST
+  - HEAD
+  - TRACE
   - PATCH
   - DELETE
-  - TRACE
   - CONNECT
-- Content type handling (HTML, JSON, TXT, AAC)
+- Content type handling (HTML, JSON, TXT, AAC, [etc](/src/enums.c3#ContentType))
 - Basic request/response handling
 - Static file serving capability
 
-## Quick Start
+### Low-Level Bindings
+
+- **libuv Bindings** (`uv`) - C3 bindings for libuv API
+
+## Dependencies
+
+- **libuv** - Cross-platform async I/O library
+- **C3 compiler** - Version 0.6.x or later
+
+### Installing libuv
+
+**Arch Linux:**
+```bash
+sudo pacman -S libuv
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install libuv1-dev
+```
+
+**macOS:**
+```bash
+brew install libuv
+```
+
+**Fedora:**
+```bash
+sudo dnf install libuv-devel
+```
+
+## Testing
+
+```bash
+c3c test
+```
+
+The test suite includes 30 tests covering all async modules.
+
+## Usage
+
+### As a Git Submodule
+
+Add ceb as a submodule to your project:
+
+```bash
+git submodule add https://github.com/shishantbiswas/ceb.git lib/ceb.c3l
+git submodule update --init --recursive
+
+# for updating
+# git submodule update --remote --recursive
+```
+
+Then add it to your `project.json` file like so:
+
+```json
+  // existing config
+  
+  "dependency-search-paths": [
+    "lib"
+  ],
+  "dependencies": [
+    "ceb" // emit the extension
+  ]
+
+  // existing config
+```
+
+## Minimal Example
 
 ```c3
 module main;
@@ -54,23 +124,35 @@ fn int main() {
 
 ## Building
 
-Make sure you have C3 compiler installed, then:
-
-```sh
+```bash
 c3c build
 ```
 
-The output binary will be available in the `build` directory.
+This will create `ceb.a` in the build directory.
 
 ## Project Structure
 
-- `src` - Source code files
-  - `src/main.c3` - Entry point
-  - `src/ceb.c3` - Core server implementation
-  - `src/enums.c3` - HTTP-related enums and constants
+- `src` - Source code files detailed below
 - `build` - Compiled output
-- `resources` - Static resources
+- `docs` - Docs for usage of CEB
 - `test` - Test files
+- `lib` - Lib files (contains [c3io](https://github.com/shishantbiswas/c3io))
+- `scripts` - Contains useful script to test the server like Apache bench
+
+```txt
+src/
+├── ceb.c3
+├── ceb_handlers.c3     // provider hono like interface like `server.get` and `server.use`
+├── chunked.c3          // for chunked data used for streaming
+├── enums.c3            // contains enums like (ContentType)
+├── examples            // examples directory 
+├── headers.c3          // internal parser util for header
+├── middleware.c3       // contains middleware code
+├── parser.c3           // code for header parser 
+├── router.c3           // tree based router similar to linear router from hono
+├── utils.c3            // contains utilities, general purpose function
+└── version.c3          // http versioning function
+```   
 
 ## Current Limitations
 
