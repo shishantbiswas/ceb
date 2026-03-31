@@ -1,7 +1,6 @@
 module main;
 import std::io;
 import std::collections::map;
-import std::time;
 
 import ceb;
 import ceb::enums;
@@ -54,30 +53,6 @@ fn Response booboo(Request req, Server *server)
 	return response;
 }
 
-enum LogPrefix : (String direction){
-  OUTGOING {"-->"},
-  INCOMING {"<--"},
-  ERROR {"xxx"},
-}
-
-fn void logger_procedure(MiddlewareCtx ctx){
-
-	TzDateTime ldt = datetime::now().to_local();
-	String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
-
-	io::printfn("[LOGGER %s]: %s %s at path '%s'", date, LogPrefix.OUTGOING.direction, ctx.request.method.str_val ,ctx.request.pathname);
-	ctx.next.call();
-	io::printfn("[LOGGER %s]: %s %s at path '%s'", date, LogPrefix.INCOMING.direction, ctx.request.method.str_val, ctx.request.pathname);
-}
-
-// pass any config options you need for your custom middlware
-fn Middleware logger(){
-	return (Middleware){
-		.name = "static_serve",
-		.procedure = &logger_procedure,
-	};
-}
-
 
 fn int main()
 {
@@ -86,7 +61,7 @@ fn int main()
 
 	defer server.start("0.0.0.0", 3000);
 
-	server.use(logger());
+	server.use(utils::logger());
 
 	server
 		// .get("/booboo2", fn (

@@ -14,6 +14,7 @@ import std::time;
 import ceb::enums;
 import ceb::router;
 import ceb::parser;
+import ceb::utils;
 import ceb::middleware;
 
 // Async (uv) imports
@@ -81,59 +82,6 @@ struct ClientCtx
 	parser::Parser parser;
 }
 
-// ---------------------------------------------------------------------------
-// Hono-style middleware chain runner
-// ---------------------------------------------------------------------------
-
-struct MiddlewareRunner
-{
-	Request    request;
-	Middleware* middleware_ptr;
-	usz        middleware_count;
-	usz        current_index;
-	Server*    server;
-	Response   result;
-}
-
-/// Internal libuv-style callback: advances the runner to the next step.
-fn void _middleware_advance(void* data)
-{
-	MiddlewareRunner* runner = (MiddlewareRunner*)data;
-	if (runner.current_index < runner.middleware_count)
-	{
-		usz idx = runner.current_index;
-		runner.current_index++;
-		MiddlewareCtx ctx = {
-			.request = runner.request,
-			.next    = { .fn_ptr = &_middleware_advance, .user_data = runner },
-		};
-		runner.middleware_ptr[idx].procedure(ctx);
-	}
-	else
-	{
-		// All middleware ran — invoke the route handler.
-		if (try Response res = runner.server.router.handle_request(runner.request, runner.server))
-		{
-			runner.result = res;
-		}
-	}
-}
-
-/// Run the full middleware chain then call the matching route handler.
-/// Returns whichever Response was produced (zero-initialised if none).
-fn Response run_middleware_chain(Request request, Server* server)
-{
-	Middleware[] mw_arr = server.middleware.to_array(tmem);
-	MiddlewareRunner runner = {
-		.request          = request,
-		.middleware_ptr   = mw_arr.ptr,
-		.middleware_count = mw_arr.len,
-		.current_index    = 0,
-		.server           = server,
-	};
-	_middleware_advance(&runner);
-	return runner.result;
-}
 
 fn char[] on_alloc(
 	tcp::TcpConnection* conn,
@@ -159,7 +107,7 @@ fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 		parser::ParseResult? parse_opt = ctx.parser.feed(data);
 		if (catch err = parse_opt)
 		{
-			io::eprintfn("Parse error %s", err); // FIXME! blows up on binary data
+			io::eprintfn("Parse error %s", err);
 			ctx.parser.free();
 			free(ctx);
 			client.close();
@@ -173,19 +121,10 @@ fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 
 			Server* server = ctx.server;
 
-			// int middleware_index = 0;
-			// ulong middleware_count = server.middleware.len();
-
-			// Middleware *mds = &server.middleware[middleware_index];
-			// mds.procedure({
-			// .request = ctx.parser.request,
-			// // .next 	 = middleware::create_next(++middleware_index, server)
-			// });
-
 			TzDateTime ldt = datetime::now().to_local();
 			String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
 
-			Response response = run_middleware_chain(ctx.parser.request, server);
+			Response response = middleware::run_middleware_chain(ctx.parser.request, server);
 			defer response.data.free();
 
 			DString content;
