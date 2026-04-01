@@ -39,19 +39,6 @@ enum ParseResult : char {
 faultdef PARSE_ERROR, INVALID_REQUEST_LINE, HEADER_TOO_LARGE, REQUEST_TOO_LARGE;
 faultdef PROTOCOL_VIOLATION;  // bare LF, null bytes, etc.
 
-// <* HTTP/1.1 request representation *>
-struct Request {
-    HttpVersion version;
-    headers::HeaderMap headers;
-    String pathname;
-    url::UrlQueryValues query;
-    HashMap{String, String} params;
-    url::Url url;
-    headers::HeaderMap trailers;
-    HttpVerb method;
-    Parser* _parser;                    // Back-reference for lazy body access
-}
-
 <* Get request body data on-demand. Returns raw binary-safe body bytes. *>
 fn char[] Request.body(&self) {
     if (!self._parser) {

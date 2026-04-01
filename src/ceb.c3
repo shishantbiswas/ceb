@@ -9,6 +9,7 @@ import std::core::mem::allocator;
 import std::core::string;
 import std::io::file;
 import std::time;
+import libc;
 
 // Ceb imports
 import ceb::enums;
@@ -41,7 +42,21 @@ struct Response
 	ContentType content_type;
 }
 
-alias HandlerFn = fn Response(parser::Request, Server *server);
+struct Request {
+    HttpVersion version;
+    headers::HeaderMap headers;
+    String pathname;
+    url::UrlQueryValues query;
+    HashMap{String, String} params;
+    url::Url url;
+    headers::HeaderMap trailers;
+    HttpVerb method;
+    Parser* _parser;
+}
+
+
+alias HandlerFn = fn Response(Request, Server *server);
+
 
 // Entrypoint after user defined handler/middlewares
 fn void Server.start(&this, String host = "127.0.0.1", int port = 8080, uint backlog = 10000)
@@ -49,6 +64,8 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080, uint bac
 	this.host = host;
 	this.port = port;
 	this.backlog = backlog;
+
+	libc::signal(libc::SIGINT, &ctrl_c_handler);
 
 	event_loop::EventLoop? loop_opt = event_loop::create();
 	if (catch err = loop_opt)
@@ -74,6 +91,11 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080, uint bac
 	server.listen(this.backlog, &on_connection, this)!!;
 
 	this.loop.run()!!;
+}
+
+fn void ctrl_c_handler(int sig) {
+    io::printf("\nShutting down server...\nExiting gracefully.\n");
+    libc::exit(libc::EXIT_SUCCESS);
 }
 
 struct ClientCtx

@@ -133,11 +133,11 @@ Which is the server executable and can be deployed on most linux system and dock
 
 ## Project Structure
 
-- `src` - Source code files detailed below
-- `build` - Compiled output
-- `docs` - Docs for usage of CEB
-- `test` - Test files
-- `lib` - Lib files (contains [c3io](https://github.com/shishantbiswas/c3io))
+- `src`     - Source code files detailed below
+- `lib`     - Lib files (contains [c3io](https://github.com/shishantbiswas/c3io))
+- `test`    - Test files
+- `docs`    - Docs for usage of CEB
+- `build`   - Compiled output
 - `scripts` - Contains useful script to test the server like Apache bench
 
 ```txt

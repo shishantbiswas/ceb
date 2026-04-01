@@ -14,8 +14,179 @@
     <h1>
       Hello from CEB
     </h1>
-    <a href="/about">About</a>
+    <p class="italic">
+      A simple web server in the C3 language
+    </p>
+
+    <main>
+      <!-- Floting badge at bottom right -->
+      <div class="fixed bottom-8 right-8">
+        <a href="https://github.com/shishantbiswas/ceb" hreflang="en"
+          class="flex items-center justify-start gap-2 px-3 py-2 bg-blue-100 hover:bg-blue-200 rounded-xl">
+          <img src="/favicon.png" alt="icon" class="size-4 aspect-square not-wysiwyg"> <span class="text-sm">Powered by
+            CEB</span>
+        </a>
+      </div>
+
+      <p>A lightweight http server framework written in C3 powered by
+        <a href="https://github.com/shishantbiswas/c3io">c3io</a> and
+        <a href="https://github.com/libuv/libuv">libuv</a>, inspired by
+        <a href="https://github.com/honojs/hono">Hono</a>,
+        <a href="https://elysiajs.com">Elysia</a> and
+        <a href="https://expressjs.com">express.js</a>
+        .
+      </p>
+
+      <!-- Feature section -->
+      <h2 id="features">Features</h2>
+      <ul>
+        <li>Simple routing system with HTTP method support <ul>
+            <li>GET</li>
+            <li>PUT</li>
+            <li>POST</li>
+            <li>HEAD</li>
+            <li>TRACE</li>
+            <li>PATCH</li>
+            <li>DELETE</li>
+            <li>CONNECT</li>
+          </ul>
+        </li>
+        <li>Content type handling (HTML, JSON, TXT, AAC, <a href="/src/enums.c3#ContentType">etc</a>)</li>
+        <li>Basic request/response handling</li>
+        <li>Static file serving capability</li>
+      </ul>
+
+      <h3 id="low-level-bindings">Low-Level Bindings</h3>
+      <ul>
+        <li><strong>libuv Bindings</strong> (<code>uv</code>) - C3 bindings for libuv API</li>
+      </ul>
+      <h2 id="dependencies">Dependencies</h2>
+      <ul>
+        <li><strong>libuv</strong> - Cross-platform async I/O library</li>
+        <li><strong>C3 compiler</strong> - Version 0.6.x or later</li>
+      </ul>
+      <h3 id="installing-libuv">Installing libuv</h3>
+      <p>
+        <strong>Arch Linux:</strong>
+      </p>
+      <pre><code class="lang-bash">sudo pacman -S libuv</code></pre>
+      <p>
+        <strong>Ubuntu/Debian:</strong>
+      </p>
+      <pre><code class="lang-bash">sudo apt install libuv1-dev</code></pre>
+      <p>
+        <strong>macOS:</strong>
+      </p>
+      <pre><code class="lang-bash">brew install libuv</code></pre>
+      <p>
+        <strong>Fedora:</strong>
+      </p>
+      <pre><code class="lang-bash">sudo dnf install libuv-devel</code></pre>
+
+      <!-- Testing section -->
+      <h2 id="testing">Testing</h2>
+      <pre><code class="lang-bash">c3c test</code></pre>
+      <p>The test suite includes 30 tests covering all async modules.</p>
+      <h2 id="usage">Usage</h2>
+      <h3 id="as-a-git-submodule">As a Git Submodule</h3>
+      <p>Add ceb as a submodule to your project:</p>
+      <pre><code class="lang-bash">git submodule <span>add</span> https://github.com/shishantbiswas/ceb.git lib/ceb.c3l
+git submodule <span>update</span> --init --recursive
+
+# <span>for</span> updating
+# git submodule <span>update</span> --remote --recursive
+</code></pre>
+      <p>Then add it to your <code>project.json</code> file like so:</p>
+      <pre><code class="lang-json">  <span>// existing config</span>
+
+  <span>"dependency-search-paths"</span>: [
+    <span>"lib"</span>
+  ],
+  <span>"dependencies"</span>: [
+    <span>"ceb"</span> <span>// emit the extension</span>
+  ]
+
+  <span>// existing config</span>
+</code></pre>
+      <h2 id="minimal-example">Minimal Example</h2>
+      <pre><code class="lang-c3"><span>module</span> main;
+<span>import</span> <span>std</span>::io;
+<span>import</span> ceb;
+
+<span>fn <span>int</span> <span>main</span><span>()</span> </span>{
+  Server server;
+  server.init();
+
+  defer server.start();
+
+  server
+    .get(<span>"/heyo"</span>,
+      fn (
+        Request req
+      ) =&gt; {
+        .status = <span>200</span>,
+        .status_text = StatusText.OK,
+        .data = dstring::temp(<span>"Hello World"</span>),
+        .content_type = ContentType.TXT
+      }
+    )
+
+  io::<span>printf</span>(<span>"Server starting...\n"</span>);  
+  <span>return</span> <span>0</span>;
+}
+</code></pre>
+      <h2 id="building">Building</h2>
+      <pre><code class="lang-bash"><span>c3c</span> build
+</code></pre>
+      <p>This will create <code>build/main</code> in the build directory.
+        Which is the server executable and can be deployed on most linux system and docker based platforms.</p>
+      <h2 id="project-structure">Project Structure</h2>
+      <ul>
+        <li><code>src</code> - Source code files detailed below</li>
+        <li><code>build</code> - Compiled output</li>
+        <li><code>docs</code> - Docs for usage of CEB</li>
+        <li><code>test</code> - Test files</li>
+        <li><code>lib</code> - Lib files (contains <a href="https://github.com/shishantbiswas/c3io">c3io</a>)</li>
+        <li><code>scripts</code> - Contains useful script to test the server like Apache bench</li>
+      </ul>
+      <pre><code class="lang-txt">src
+  ├── ceb<span>.c3</span>
+  ├── ceb_handlers<span>.c3</span>     <span>// provider hono like interface like `server.get` and `server.use`</span>
+  ├── chunked<span>.c3</span>          <span>// for chunked data used for streaming</span>
+  ├── enums<span>.c3</span>            <span>// contains enums like (ContentType)</span>
+  ├── examples            <span>// examples directory </span>
+  ├── headers<span>.c3</span>          <span>// internal parser util for header</span>
+  ├── middleware<span>.c3</span>       <span>// contains middleware code</span>
+  ├── parser<span>.c3</span>           <span>// code for header parser </span>
+  ├── router<span>.c3</span>           <span>// tree based router similar to linear router from hono</span>
+  ├── utils<span>.c3</span>            <span>// contains utilities, general purpose function</span>
+  └── version<span>.c3</span>          <span>// http versioning function</span>
+  </code>
+</pre>
+      <h2 id="current-limitations">Current Limitations</h2>
+      <ul>
+        <li>Early prototype stage</li>
+        <li>Not optimized for production use</li>
+        <li>Limited error handling</li>
+        <li>No security features implemented</li>
+        <li>Limited request parsing capabilities</li>
+        <li>No SSL/TLS support</li>
+      </ul>
+      <h2 id="development-status">Development Status</h2>
+      <p>This project is in active development and should be considered alpha software. It is primarily intended for:
+      </p>
+      <ul>
+        <li>Experimenting with web server concepts</li>
+        <li>Understanding low-level networking</li>
+      </ul>
+      <p>Do not use this in production environments.</p>
+
+    </main>
+
   </section>
+  <footer>
+
+  </footer>
 </body>
 
 </html>

@@ -6,3 +6,7 @@
 body{
   @apply max-w-5xl mx-auto wysiwyg;
 }
+
+section{
+  @apply mt-8 p-8
+}
