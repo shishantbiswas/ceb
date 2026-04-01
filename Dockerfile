@@ -1,6 +1,7 @@
 FROM alpine:3.23.3 AS base
 
 RUN apk add --no-cache \
+    build-base \
     libc6-compat \
     libuv \
     libuv-dev \
@@ -8,27 +9,50 @@ RUN apk add --no-cache \
     g++ \
     curl \
     libffi-dev \
-    zlib-dev
+    zlib-dev \
+    cmake   \
+    ninja   \
+    git
 
-# LLVM 20 and LLD 20 from Edge
+# LLVM 20 and all required build dependencies from Edge
 RUN apk add --no-cache \
     --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main \
     --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community \
-    llvm20-libs \
-    lld20-libs \
-    lld20
+    # Existing packages...
+    llvm20-dev \
+    llvm20-static \
+    llvm20-test-utils \
+    llvm20-gtest \
+    # LLD and Clang
+    lld20-dev \
+    clang20-dev \
+    clang20-static \
+    # Required system libs for LLVM 20 linking
+    zstd-dev \
+    zlib-dev \
+    libxml2-dev \
+    curl-dev
 
 FROM base AS install
 WORKDIR /app
+RUN git clone --depth=1 https://github.com/c3lang/c3c
 
-RUN curl -fsSL -o c3-linux-musl.tar.gz \
-    https://github.com/c3lang/c3c/releases/download/v0.7.10/c3-linux-musl.tar.gz && \
-    tar -xzf c3-linux-musl.tar.gz && \
-    rm c3-linux-musl.tar.gz
-
-RUN mv c3/c3c /usr/local/bin/c3c && \
+RUN cd c3c && \
+    mkdir build && \
+    cd build && \
+    cmake -G Ninja \
+    -DC3_LINK_DYNAMIC=ON \
+    -DLLVM_DIR=/usr/lib/llvm20/lib/cmake/llvm \
+    -DMLIR_DIR=/usr/lib/llvm20/lib/cmake/mlir \
+    .. && \    
+    ninja && \
+    cp c3c /usr/local/bin/c3c && \
     mkdir -p /usr/local/lib/c3 && \
-    mv c3/lib/* /usr/local/lib/c3/
+    cp -r lib/* /usr/local/lib/c3/
+
+    # RUN mv c3c /usr/local/bin/c3c && \
+    # mkdir -p /usr/local/lib/c3 && \
+    # mv lib/* /usr/local/lib/c3/
 
 FROM base AS build
 WORKDIR /app

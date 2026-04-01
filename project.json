@@ -15,7 +15,8 @@
   ],
   "version": "0.1.1",
   "sources": [
-    "src/**"
+    "src/**",
+    "lib/c3io.c3l/src/**"
   ],
   "test-sources": [
     "test/**"
