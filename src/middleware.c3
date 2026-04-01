@@ -26,9 +26,15 @@ fn void Next.call(&self)
 // / Context passed to every middleware function.
 struct MiddlewareCtx
 {
+	Request* req;
+	Server* server;
+	Response* _resp_ptr;
 	Next next;
-	Request request;
-	Response* response;
+}
+
+fn void MiddlewareCtx.response(&self, Response res)
+{
+	*self._resp_ptr = res;
 }
 
 alias MiddlewareFn = fn void(MiddlewareCtx);
@@ -41,20 +47,25 @@ struct Middleware
 }
 
 
+alias ChainCompleteCallback = fn void(Response response, void* user_data);
+
 // / Run the full middleware chain then call the matching route handler.
 // / Returns whichever Response was produced (zero-initialised if none).
-fn Response run_middleware_chain(Request request, Server* server)
+fn void run_middleware_chain(Request* request, Server* server, void* user_data, ChainCompleteCallback complete_cb)
 {
 	Middleware[] mw_arr = server.middleware.to_array(tmem);
-	MiddlewareRunner runner = {
+	MiddlewareRunner* runner = mem::new(MiddlewareRunner);
+	*runner = {
 		.request = request,
 		.middleware_ptr = mw_arr.ptr,
 		.middleware_count = mw_arr.len,
 		.current_index = 0,
 		.server = server,
+		.user_data = user_data,
+		.complete_cb = complete_cb,
 	};
-	_middleware_advance(&runner);
-	return runner.result;
+	runner.result.headers.tinit();
+	_middleware_advance(runner);
 }
 
 
@@ -64,12 +75,14 @@ fn Response run_middleware_chain(Request request, Server* server)
 
 struct MiddlewareRunner
 {
-	Request request;
+	Request* request;
 	Middleware* middleware_ptr;
 	usz middleware_count;
 	usz current_index;
 	Server* server;
 	Response result;
+	void* user_data;
+	ChainCompleteCallback complete_cb;
 }
 
 
@@ -81,19 +94,32 @@ fn void _middleware_advance(void* data)
 	{
 		usz idx = runner.current_index;
 		runner.current_index++;
-		MiddlewareCtx ctx = {
-			.request = runner.request,
-			.response = &runner.result,
+		MiddlewareCtx m_ctx = {
+			.req = runner.request,
+			.server = runner.server,
+			._resp_ptr = &runner.result,
 			.next = { .fn_ptr = &_middleware_advance, .user_data = runner },
 		};
-		runner.middleware_ptr[idx].procedure(ctx);
+		runner.middleware_ptr[idx].procedure(m_ctx);
 	}
 	else
 	{
 		// All middleware ran — invoke the route handler.
-		if (try Response res = runner.server.router.handle_request(runner.request, runner.server))
-		{
-			runner.result = res;
-		}
+		runner.server.router.handle_request(runner.request, runner.server, {
+			.req = runner.request,
+			.server = runner.server,
+			._resp_ptr = &runner.result,
+			.next = { .fn_ptr = &_middleware_finish, .user_data = runner }
+		});
 	}
+}
+
+fn void _middleware_finish(void* data)
+{
+	MiddlewareRunner* runner = (MiddlewareRunner*)data;
+	if (runner.complete_cb)
+	{
+		runner.complete_cb(runner.result, runner.user_data);
+	}
+	free(runner);
 }

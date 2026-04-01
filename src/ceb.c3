@@ -55,7 +55,20 @@ struct Request {
 }
 
 
-alias HandlerFn = fn Response(Request, Server *server);
+struct Context
+{
+	Request* req;
+	Server* server;
+	Response* _resp_ptr;
+	Next next;
+}
+
+fn void Context.response(&self, Response res)
+{
+	*self._resp_ptr = res;
+}
+
+alias HandlerFn = fn void(Context ctx);
 
 
 // Entrypoint after user defined handler/middlewares
@@ -102,6 +115,7 @@ struct ClientCtx
 {
 	Server* server;
 	parser::Parser parser;
+	tcp::TcpConnection* client;
 }
 
 
@@ -141,36 +155,45 @@ fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 			// if(ctx.parser.header.headers.has("expect")){
 			// } // Expect: 100-continue
 
-			Server* server = ctx.server;
-
-			TzDateTime ldt = datetime::now().to_local();
-			String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
-
-			Response response = middleware::run_middleware_chain(ctx.parser.request, server);
-			defer response.data.free();
-
-			DString content;
-			content.tinit();
-
-			content.appendf("HTTP/1.1 %d %s\r\n", response.status, response.status_text);
-
-			// Headers
-			content.appendf("Server: CEB/0.1.1\r\n");
-			content.appendf("Date: %s\r\n", date);
-			content.appendf("Content-Length: %d\r\n", response.data.len());
-			content.appendf("Content-Type: %s\r\n", response.content_type.mime_type);
-
-			foreach (key : response.headers.tkeys())
-			{
-				content.appendf("%s: %s\r\n", key, response.headers.get(key)!!);
-			}
-
-			// Data
-			content.appendf("\r\n%s", response.data.str_view());
-
-			String content_str = content.str_view();
-			client.write((char[])content_str.ptr[:content_str.len], &on_write, ctx)!!;
+			ctx.client = client;
+			middleware::run_middleware_chain(&ctx.parser.request, ctx.server, ctx, &on_chain_complete);
 		}
+	};
+}
+
+fn void on_chain_complete(Response response, void* user_data)
+{
+	@pool()
+	{
+		ClientCtx* ctx = (ClientCtx*)user_data;
+		tcp::TcpConnection* client = ctx.client;
+
+		TzDateTime ldt = datetime::now().to_local();
+		String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
+
+		DString content;
+		content.tinit();
+
+		content.appendf("HTTP/1.1 %d %s\r\n", response.status, response.status_text.value);
+
+		// Headers
+		content.appendf("Server: CEB/0.1.1\r\n");
+		content.appendf("Date: %s\r\n", date);
+		content.appendf("Content-Length: %d\r\n", response.data.len());
+		content.appendf("Content-Type: %s\r\n", response.content_type.mime_type);
+
+		foreach (key : response.headers.tkeys())
+		{
+			content.appendf("%s: %s\r\n", key, response.headers.get(key)!!);
+		}
+
+		// Data
+		content.appendf("\r\n%s", response.data.str_view());
+
+		String content_str = content.str_view();
+		client.write((char[])content_str.ptr[:content_str.len], &on_write, ctx)!!;
+
+		response.data.free();
 	};
 }
 

@@ -299,19 +299,21 @@ fn RouteInfo* Router.find_route(&self, String pathname, HttpVerb method)
 }
 
 // Handle request
-fn Response? Router.handle_request(&self, Request request, Server *server)
+fn void Router.handle_request(&self, Request* request, Server *server, Context ctx)
 {
 	if (!self.method_tries.has_key(request.method.str_val))
 	{
 		DString not_found_body;
 		not_found_body.init(mem);
 		not_found_body.append("{\"error\": \"Route not found\"}");
-		return {
+		ctx.response({
 			.status = 404,
 			.status_text = StatusText.NOT_FOUND,
 			.data = not_found_body,
 			.content_type = ContentType.JSON
-		};
+		});
+		ctx.next.call();
+		return;
 	}
 
 	TrieNode* root = &self.method_tries[request.method.str_val];
@@ -335,19 +337,20 @@ fn Response? Router.handle_request(&self, Request request, Server *server)
 			}
 		}
 
-		return route.handler_fn(request, server);
+		route.handler_fn(ctx);
 	}
 	else
 	{
 		DString not_found_body;
 		not_found_body.init(mem);
 		not_found_body.append("{\"error\": \"Route not found\"}");
-		return {
+		ctx.response({
 			.status = 404,
 			.status_text = StatusText.NOT_FOUND,
 			.data = not_found_body,
 			.content_type = ContentType.JSON
-		};
+		});
+		ctx.next.call();
 	}
 }
 
