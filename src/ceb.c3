@@ -87,7 +87,6 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080, uint bac
 		return;
 	}
 	this.loop = loop_opt;
-	defer this.loop.free();
 
 	tcp::TcpConnection*? server_opt = tcp::create(&this.loop);
 	if (catch err = server_opt)
@@ -99,10 +98,14 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080, uint bac
 	defer server.close();
 
 	server.bind(this.host, (ushort)this.port)!!;
+
+	if(catch err = server.listen(this.backlog, &on_connection, this)){
+		io::printf("[ERROR] %s\nFailed to start server\n", err);
+		return;
+	};
+
 	io::printfn("Server listening on http://%s:%d", this.host, this.port);
-
-	server.listen(this.backlog, &on_connection, this)!!;
-
+	defer this.loop.free();
 	this.loop.run()!!;
 }
 
@@ -133,7 +136,14 @@ fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 
 		if (data.len == 0)
 		{
-			// EOF - client closed connection
+			// EOF or error - client closed connection
+			if (ctx.parser.state == parser::ParserState.COMPLETE)
+			{
+				// If we already finished parsing, let the write/chain finish and cleanup
+				client.close();
+				return;
+			}
+
 			ctx.parser.free();
 			free(ctx);
 			client.close();
@@ -152,9 +162,8 @@ fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 
 		if (parse_opt == parser::ParseResult.COMPLETE)
 		{
-			// if(ctx.parser.header.headers.has("expect")){
-			// } // Expect: 100-continue
-
+			// Request complete - stop reading for this connection
+			client.stop_read()!!;
 			ctx.client = client;
 			middleware::run_middleware_chain(&ctx.parser.request, ctx.server, ctx, &on_chain_complete);
 		}
@@ -191,7 +200,13 @@ fn void on_chain_complete(Response response, void* user_data)
 		content.appendf("\r\n%s", response.data.str_view());
 
 		String content_str = content.str_view();
-		client.write((char[])content_str.ptr[:content_str.len], &on_write, ctx)!!;
+		if (catch err = client.write((char[])content_str.ptr[:content_str.len], &on_write, ctx))
+		{
+			io::eprintfn("Initial write failed: %s", err);
+			ctx.parser.free();
+			free(ctx);
+			client.close();
+		}
 
 		response.data.free();
 	};
