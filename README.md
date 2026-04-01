@@ -1,6 +1,6 @@
 <div align="left">
   <a href="#">
-    <img src="docs/assets/favicon.png" width="150" height="150" alt="Hono"/>
+    <img src="docs/assets/favicon.svg" width="150" height="150" alt="Hono"/>
   </a>
 </div>
 

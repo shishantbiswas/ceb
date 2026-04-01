@@ -1,5 +1,5 @@
 ab -n 10000 -c 1000 http://localhost:3000/
-ab -n 10000 -c 1000 http://localhost:3000/favicon.png
+ab -n 10000 -c 1000 http://localhost:3000/favicon.svg
 ab -n 10000 -c 1000 http://localhost:3000/user/1337
 ab -n 10000 -c 1000 http://localhost:3000/api/proxy
 

@@ -86,7 +86,7 @@ fn int main()
 		// casting is optional from compiler version 0.7.10
 		.get("/",            fn (Request req, Server *server) => utils::read_file(server, "docs/index.html"))
 		.get("/about",       fn (Request req, Server *server) => utils::read_file(server, "docs/about.html"))
-		.get("/favicon.png", fn (Request req, Server *server) => utils::read_file(server, "docs/assets/favicon.png"))
+		.get("/favicon.svg", fn (Request req, Server *server) => utils::read_file(server, "docs/assets/favicon.svg"))
 		.get("/output.css",  fn (Request req, Server *server) => utils::read_file(server, "docs/output.css"))
 		.get("/user/:id",    &userHandler)
 		.get("/api/proxy/*", &apiHandler)
