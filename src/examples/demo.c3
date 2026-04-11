@@ -67,7 +67,7 @@ fn int main()
 
 	defer server.start("0.0.0.0", 3000);
 
-	// server.use(utils::logger());
+	server.use(utils::logger());
 
 	server
 		.get("/heyo",

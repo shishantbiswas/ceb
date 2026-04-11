@@ -52,7 +52,7 @@ struct Parser {
     ParserState state;
     io::ByteBuffer buffer;                  // For request line + headers only
     io::ByteBuffer body_buffer;             // Separate buffer for body data (binary-safe)
-    Request request;
+    ceb::Request request;
     usz bytes_parsed;
     usz max_header_size;
     usz max_request_size;

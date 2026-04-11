@@ -1,3 +1,14 @@
+> [!NOTE]
+> **THIS REPOSITORY IS NO LONGER MAINTAINED.**
+>
+> Based on how things have been going in my life, I'm unable to maintain this project plus
+> I don't think I have the expertise to continue, I planned to use coroutines to avoid the "callback hell" syntax of libuv
+> but It's harder than I imagined and not to mention I'll have to recreate most things 
+> from js ecosystem like (validators, http client, primitives for tcp/udp) for this to be anything remotely production ready 
+> and I just don't have the resources for that
+
+---
+
 <div align="left">
   <a href="#">
     <img src="docs/assets/favicon.svg" width="150" height="150" alt="Hono"/>

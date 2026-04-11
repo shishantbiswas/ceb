@@ -114,7 +114,7 @@ fn void ctrl_c_handler(int sig) {
     libc::exit(libc::EXIT_SUCCESS);
 }
 
-struct ClientCtx
+struct ServerConnectionCtx
 {
 	Server* server;
 	parser::Parser parser;
@@ -132,7 +132,7 @@ fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
 {
 	@pool()
 	{
-		ClientCtx* ctx = (ClientCtx*)user_data;
+		ServerConnectionCtx* ctx = (ServerConnectionCtx*)user_data;
 
 		if (data.len == 0)
 		{
@@ -174,7 +174,7 @@ fn void on_chain_complete(Response response, void* user_data)
 {
 	@pool()
 	{
-		ClientCtx* ctx = (ClientCtx*)user_data;
+		ServerConnectionCtx* ctx = (ServerConnectionCtx*)user_data;
 		tcp::TcpConnection* client = ctx.client;
 
 		TzDateTime ldt = datetime::now().to_local();
@@ -214,7 +214,7 @@ fn void on_chain_complete(Response response, void* user_data)
 
 fn void on_write(tcp::TcpConnection* client, int status, void* user_data)
 {
-	ClientCtx* ctx = (ClientCtx*)user_data;
+	ServerConnectionCtx* ctx = (ServerConnectionCtx*)user_data;
 	if (status != 0)
 	{
 		io::eprintfn("Write failed");
@@ -227,7 +227,7 @@ fn void on_write(tcp::TcpConnection* client, int status, void* user_data)
 fn void on_connection(tcp::TcpConnection* server, tcp::TcpConnection* client, void* user_data)
 {
 	// io::printfn("New client connected!");
-	ClientCtx* ctx = mem::new(ClientCtx);
+	ServerConnectionCtx* ctx = mem::new(ServerConnectionCtx);
 	ctx.server = (Server*)user_data;
 	ctx.parser.init();
 

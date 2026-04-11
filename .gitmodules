@@ -5,10 +5,3 @@
 # [submodule "lib/c3web.c3l"]
 # 	path = lib/c3web.c3l
 # 	url = https://github.com/shishantbiswas/c3web.git
-
-[submodule "lib/libaco.c3l"]
-	path = lib/libaco.c3l
-	url = https://github.com/hnes/libaco
-[submodule "libaco/lib/libaco"]
-	path = libaco/lib/libaco
-	url = https://github.com/hnes/libaco
