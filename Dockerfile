@@ -38,8 +38,8 @@ WORKDIR /app
 RUN git clone --depth=1 https://github.com/c3lang/c3c
 
 RUN cd c3c && \
-    git reset --hard 0d4a0d05f061 \
-    #                ^ Release Version 0.7.11
+    git fetch --depth 1 origin 71c5d5b && \
+    git reset --hard FETCH_HEAD \
     mkdir build && \
     cd build && \
     cmake -G Ninja \
