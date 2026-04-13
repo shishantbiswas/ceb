@@ -50,10 +50,6 @@ RUN cd c3c && \
     mkdir -p /usr/local/lib/c3 && \
     cp -r lib/* /usr/local/lib/c3/
 
-    # RUN mv c3c /usr/local/bin/c3c && \
-    # mkdir -p /usr/local/lib/c3 && \
-    # mv lib/* /usr/local/lib/c3/
-
 FROM base AS build
 WORKDIR /app
 
@@ -65,7 +61,9 @@ COPY . .
 RUN c3c build web
 
 
-FROM base AS runner
+FROM alpine:3.23.3 AS runner
+RUN apk add --no-cache libuv 
+
 WORKDIR /app
 COPY --from=build /app/docs /app/docs
 COPY --from=build /app/build/web /app/ 
