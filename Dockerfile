@@ -35,7 +35,7 @@ RUN apk add --no-cache \
 
 FROM base AS install
 WORKDIR /app
-RUN git clone --depth=1 https://github.com/c3lang/c3c
+RUN git clone https://github.com/c3lang/c3c
 
 RUN cd c3c && \
     git fetch --depth 1 origin 71c5d5b && \
