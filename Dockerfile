@@ -64,7 +64,7 @@ RUN c3c build web
 
 
 FROM alpine:3.23.3 AS runner
-RUN apk add --no-cache libuv 
+RUN apk add --no-cache libuv curl
 
 WORKDIR /app
 COPY --from=build /app/docs /app/docs
