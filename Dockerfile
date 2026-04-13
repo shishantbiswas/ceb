@@ -38,7 +38,7 @@ WORKDIR /app
 RUN git clone https://github.com/c3lang/c3c
 
 RUN cd c3c && \
-    git fetch --depth 1 origin 92ed8b5c38435ddfa50edbafb114fa53e926a0b0 && \
+    git fetch --depth 1 origin b06693b080b6b2dce0ce2175ac7759e43eba0df3 && \
     git reset --hard FETCH_HEAD && \
     mkdir build && \
     cd build && \
