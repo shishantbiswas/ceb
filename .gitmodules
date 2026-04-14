@@ -2,6 +2,10 @@
 	path = lib/c3io.c3l
 	url = https://github.com/shishantbiswas/c3io.git
 
+[submodule "lib/c3co.c3l"]
+	path = lib/c3co.c3l
+	url = https://github.com/shishantbiswas/c3co.git
+
 # [submodule "lib/c3web.c3l"]
 # 	path = lib/c3web.c3l
 # 	url = https://github.com/shishantbiswas/c3web.git

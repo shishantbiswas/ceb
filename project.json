@@ -8,7 +8,8 @@
     "lib"
   ],
   "dependencies": [
-    "c3io"
+    "c3io",
+    "c3co"
   ],
   "authors": [
     "Shishant Biswas <shishantbiswas@gmail.com>"
@@ -16,12 +17,15 @@
   "version": "0.1.1",
   "sources": [
     "src/**",
-    "lib/c3io.c3l/src/**"
+    "lib/c3io.c3l/src/**",
+    "lib/c3co.c3l/**"
   ],
   "test-sources": [
     "test/**"
   ],
   "output": "build",
+  "linker-search-paths": ["lib/c3co.c3l"],
+  "linked-libraries": ["c3co"],
   "targets": {
     "web": {
       "sources": [

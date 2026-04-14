@@ -8,27 +8,66 @@ import ceb;
 
 import async::file;
 import uv;
+import co;
 
-// Handler
-struct ReadFileContext
+struct AsyncFileState
 {
-	Server* server;
-	String filename;
-	Context ctx;
-	Response response;
-    async::file::FileHandle* file;
-    usz size;
+	co::CoThread* worker_fiber;
+	co::CoThread* loop_fiber;
+	FileHandle* file;
+	int status;
+	uv::FileStat* stat;
+	DString* data_out;
 }
 
+fn void on_open_async(FileHandle* file, int status, void* user_data)
+{
+	AsyncFileState* state = (AsyncFileState*)user_data;
+	state.file = file;
+	state.status = status;
+	co::co_switch(state.worker_fiber);
+}
+
+fn void on_stat_async(uv::FileStat* stat, int status, void* user_data)
+{
+	AsyncFileState* state = (AsyncFileState*)user_data;
+	state.stat = stat;
+	state.status = status;
+	co::co_switch(state.worker_fiber);
+}
+
+fn void on_read_async(char[] data, int status, void* user_data)
+{
+	AsyncFileState* state = (AsyncFileState*)user_data;
+	if (status >= 0 && data.len > 0)
+	{
+		state.data_out.append(data);
+	}
+	state.status = status;
+	co::co_switch(state.worker_fiber);
+}
 
 // Handler
-fn void read_file(Server* server, String filename, Context ctx)
+fn Response read_file(Server* server, String filename, Context ctx)
 {
-	ReadFileContext* read_ctx = mem::new(ReadFileContext);
-	read_ctx.server = server;
-	read_ctx.filename = filename;
-	read_ctx.ctx = ctx;
 	ContentType content_type = ContentType.TXT;
+	DString data;
+	data.init(mem);
+	Response res = {
+		.status = 200,
+		.status_text = StatusText.OK,
+		.content_type = content_type,
+		.data = data
+	};
+	res.headers.tinit();
+	res.headers.set("Cache-Control", "max-age=31536000");
+
+	AsyncFileState state = {
+		.worker_fiber = co::co_active(),
+		.loop_fiber = server.loop_fiber,
+		.data_out = &res.data
+	};
+
 	if (try Path pathname = path::temp(filename))
 	{
 		if (try String extname = pathname.extension())
@@ -50,87 +89,42 @@ fn void read_file(Server* server, String filename, Context ctx)
 				case "css":  content_type = ContentType.CSS;  break;
 				default:     content_type = ContentType.BINARY; break;
 			}
+			res.content_type = content_type;
 		}
-	}
 
-	read_ctx.response.data.init(mem);
-	read_ctx.response.headers.init(mem);
-	read_ctx.response.headers.set("Cache-Control", "max-age=31536000");
-    read_ctx.response.status = 200;
-    read_ctx.response.status_text = StatusText.OK;
-    read_ctx.response.content_type = content_type;
+		// Asynchronous file operations using libuv and libco
+		async::file::open(&server.loop, pathname.str_view(), async::file::OPEN_RDONLY, 0, &on_open_async, &state);
+		co::co_switch(state.loop_fiber);
 
-	async::file::stat(&server.loop, filename, &on_read_file_stat, read_ctx);
-}
+		if (state.status >= 0)
+		{
+			async::file::stat(&server.loop, pathname.str_view(), &on_stat_async, &state);
+			co::co_switch(state.loop_fiber);
 
-fn void on_read_file_stat(uv::FileStat* stat, int status, void* user_data)
-{
-	ReadFileContext* ctx = (ReadFileContext*)user_data;
-	if (status < 0)
-	{
-		ctx.response.data.append("Internal Server Error");
-		ctx.response.status = 500;
-		ctx.ctx.response(ctx.response);
-		ctx.ctx.next.call();
-		free(ctx);
-		return;
-	}
+			if (state.status >= 0)
+			{
+				state.file.read(0, (usz)state.stat.st_size, &on_read_async, &state);
+				co::co_switch(state.loop_fiber);
+			}
 
-    ctx.size = (usz)stat.st_size;
-	async::file::open(&ctx.server.loop, ctx.filename, async::file::OPEN_RDONLY, 0, &on_read_file_open, ctx);
-}
+			state.file.close(null, null);
+		}
 
-fn void on_read_file_open(async::file::FileHandle* file, int status, void* user_data)
-{
-	ReadFileContext* ctx = (ReadFileContext*)user_data;
-	if (status < 0 || !file)
-	{
-		ctx.response.data.append("Internal Server Error");
-		ctx.response.status = 500;
-		ctx.ctx.response(ctx.response);
-		ctx.ctx.next.call();
-		free(ctx);
-		return;
-	}
-
-    ctx.file = file;
-	file.read(0, ctx.size, &on_read_file_read, ctx);
-}
-
-fn void on_read_file_read(char[] data, int status, void* user_data)
-{
-	{ReadFileContext* ctx = (ReadFileContext*)user_data;
-    bool success = true;
-	if (status < 0)
-	{
-		ctx.response.data.append("Internal Server Error");
-		ctx.response.status = 500;
-        success = false;
+		if (state.status < 0)
+		{
+			res.status = 404;
+			res.status_text = StatusText.NOT_FOUND;
+			res.data.append("File not found or error occurred");
+		}
 	}
 	else
 	{
-		ctx.response.data.append(data);
-		ctx.response.status = 200;
+		res.status = 500;
+		res.status_text = StatusText.INTERNAL_SERVER_ERROR;
+		res.data.append("Invalid path");
 	}
 
-	ctx.ctx.response(ctx.response);
-    
-    if (ctx.file)
-    {
-        ctx.file.close(&on_read_file_close, ctx);
-    }
-    else
-    {
-        ctx.ctx.next.call();
-        free(ctx);
-    }}
-}
-
-fn void on_read_file_close(int status, void* user_data)
-{
-    ReadFileContext* ctx = (ReadFileContext*)user_data;
-    ctx.ctx.next.call();
-    free(ctx);
+	return res;
 }
 
 enum LogPrefix : (String direction)
@@ -169,7 +163,7 @@ fn String color_status(int status)
 	return color.str_view();
 }
 
-fn void logger_procedure(MiddlewareCtx ctx)
+fn Response logger_procedure(Context ctx)
 {
 	TzDateTime ldt = datetime::now().to_local();
 	String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
@@ -181,7 +175,7 @@ fn void logger_procedure(MiddlewareCtx ctx)
 		ctx.req.pathname
 	);
 
-	ctx.next.call();
+	Response res = ctx.next();
 
 	io::printfn(
 		"[LOGGER %s]: %s %s at path '%s' %s",
@@ -189,8 +183,9 @@ fn void logger_procedure(MiddlewareCtx ctx)
 		LogPrefix.INCOMING.direction,
 		ctx.req.method.str_val,
 		ctx.req.pathname,
-		color_status(ctx._resp_ptr.status)
+		color_status(res.status)
 	);
+	return res;
 }
 
 // pass any config options you need for your custom middlware

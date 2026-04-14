@@ -70,6 +70,7 @@ enum StatusText :(int code, String value){
   OK        {200, "OK"},
   CONTINUE  {100, "CONTINUE"},
   NOT_FOUND {404, "NOT_FOUND"},
+  INTERNAL_SERVER_ERROR {500, "INTERNAL_SERVER_ERROR"},
 }
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types/Common_types
 enum ContentType : (String ext, String mime_type){

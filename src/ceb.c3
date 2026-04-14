@@ -2,10 +2,8 @@ module ceb;
 // Std imports
 import std::collections::list;
 import std::net;
-import std::net::tcp;
 import std::thread;
 import std::collections::map;
-import std::core::mem::allocator;
 import std::core::string;
 import std::io::file;
 import std::time;
@@ -22,16 +20,22 @@ import ceb::middleware;
 import async::event_loop;
 import async::tcp;
 
+// Coroutine/Fiber (libco) imports
+import co;
+
 struct Server
 {
 	Router router;
 	List{Middleware} middleware;
-	TcpServerSocket server;
 	String host;
 	event_loop::EventLoop loop;
 	uint port;
 	uint backlog;
+	co::CoThread* loop_fiber;
 }
+
+// Request-local tracking
+void* active_ctx;
 
 struct Response
 {
@@ -59,17 +63,42 @@ struct Context
 {
 	Request* req;
 	Server* server;
-	Response* _resp_ptr;
-	Next next;
+	usz _mw_index;
 }
 
-fn void Context.response(&self, Response res)
+fn Response Context.next(&self)
 {
-	*self._resp_ptr = res;
+	self._mw_index++;
+	if (self._mw_index <= self.server.middleware.len())
+	{
+		Context c = *self;
+		return self.server.middleware[self._mw_index - 1].procedure(c);
+	}
+	else
+	{
+		Context c = *self;
+		return self.server.router.handle_request(self.req, self.server, c);
+	}
 }
 
-alias HandlerFn = fn void(Context ctx);
+alias HandlerFn = fn Response(Context ctx);
 
+
+// Server Methods
+fn Server* Server.init(&self)
+{
+	self.middleware.init(mem);
+	self.router.init();
+	return self;
+}
+
+fn RouteInfo* Server.find_route(&this, String pathname, HttpVerb method) => this.router.find_route(pathname, method);
+
+fn void* Server.use(&this, Middleware middleware_ctx)
+{
+	this.middleware.push(middleware_ctx);
+	return null;
+}
 
 // Entrypoint after user defined handler/middlewares
 fn void Server.start(&this, String host = "127.0.0.1", int port = 8080, uint backlog = 10000)
@@ -77,6 +106,7 @@ fn void Server.start(&this, String host = "127.0.0.1", int port = 8080, uint bac
 	this.host = host;
 	this.port = port;
 	this.backlog = backlog;
+	this.loop_fiber = co::co_active();
 
 	libc::signal(libc::SIGINT, &ctrl_c_handler);
 
@@ -114,11 +144,46 @@ fn void ctrl_c_handler(int sig) {
     libc::exit(libc::EXIT_SUCCESS);
 }
 
+// Request Prossesing
 struct ServerConnectionCtx
 {
 	Server* server;
 	parser::Parser parser;
 	tcp::TcpConnection* client;
+	co::CoThread* fiber;
+	bool has_error;
+	char[] read_buffer;
+	bool write_done;
+}
+
+// Async TCP primitives for fibers
+fn char[] read_async(tcp::TcpConnection* client, ServerConnectionCtx* ctx)
+{
+	client.start_read(&on_alloc, &on_read_async, ctx)!!;
+	co::co_switch(ctx.server.loop_fiber);
+	return ctx.read_buffer;
+}
+
+fn void write_async(tcp::TcpConnection* client, char[] data, ServerConnectionCtx* ctx)
+{
+	ctx.write_done = false;
+	client.write(data, &on_write_async, ctx)!!;
+	co::co_switch(ctx.server.loop_fiber);
+}
+
+fn void on_read_async(tcp::TcpConnection* client, char[] data, void* user_data)
+{
+	ServerConnectionCtx* ctx = (ServerConnectionCtx*)user_data;
+	client.stop_read()!!;
+	ctx.read_buffer = data;
+	co::co_switch(ctx.fiber);
+}
+
+fn void on_write_async(tcp::TcpConnection* client, int status, void* user_data)
+{
+	ServerConnectionCtx* ctx = (ServerConnectionCtx*)user_data;
+	ctx.write_done = true;
+	co::co_switch(ctx.fiber);
 }
 
 
@@ -128,123 +193,82 @@ fn char[] on_alloc(
 	void* user_data
 ) => mem::new_array(char, suggested_size);
 
-fn void on_read(tcp::TcpConnection* client, char[] data, void* user_data)
+fn void connection_worker(void* data)
 {
 	@pool()
 	{
-		ServerConnectionCtx* ctx = (ServerConnectionCtx*)user_data;
+		ServerConnectionCtx* conn_ctx = (ServerConnectionCtx*)active_ctx;
 
-		if (data.len == 0)
+		while (true)
 		{
-			// EOF or error - client closed connection
-			if (ctx.parser.state == parser::ParserState.COMPLETE)
+			char[] read_data = read_async(conn_ctx.client, conn_ctx);
+			if (read_data.len == 0) break; // EOF
+
+			parser::ParseResult? parse_opt = conn_ctx.parser.feed(read_data);
+			if (catch err = parse_opt)
 			{
-				// If we already finished parsing, let the write/chain finish and cleanup
-				client.close();
-				return;
+				io::eprintfn("Parse error: %s", err);
+				break;
 			}
 
-			ctx.parser.free();
-			free(ctx);
-			client.close();
-			return;
+			if (parse_opt == parser::ParseResult.COMPLETE)
+			{
+				Context ctx = {
+					.req = &conn_ctx.parser.request,
+					.server = conn_ctx.server,
+					._mw_index = 0
+				};
+
+				Response res = ctx.next();
+				send_response(res, conn_ctx);
+				break; // Currently handle one request per connection for simplicity
+			}
 		}
 
-		parser::ParseResult? parse_opt = ctx.parser.feed(data);
-		if (catch err = parse_opt)
-		{
-			io::eprintfn("Parse error %s", err);
-			ctx.parser.free();
-			free(ctx);
-			client.close();
-			return;
-		}
-
-		if (parse_opt == parser::ParseResult.COMPLETE)
-		{
-			// Request complete - stop reading for this connection
-			client.stop_read()!!;
-			ctx.client = client;
-			middleware::run_middleware_chain(&ctx.parser.request, ctx.server, ctx, &on_chain_complete);
-		}
+		conn_ctx.parser.free();
+		conn_ctx.client.close();
+		free(conn_ctx);
 	};
 }
 
-fn void on_chain_complete(Response response, void* user_data)
+fn void send_response(Response response, ServerConnectionCtx* conn_ctx)
 {
-	@pool()
+	TzDateTime ldt = datetime::now().to_local();
+	String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
+
+	DString content;
+	content.tinit();
+
+	content.appendf("HTTP/1.1 %d %s\r\n", response.status, response.status_text.value);
+	content.appendf("Server: CEB/0.1.1\r\n");
+	content.appendf("Date: %s\r\n", date);
+	content.appendf("Content-Length: %d\r\n", response.data.len());
+	content.appendf("Content-Type: %s\r\n", response.content_type.mime_type);
+
+	foreach (key : response.headers.tkeys())
 	{
-		ServerConnectionCtx* ctx = (ServerConnectionCtx*)user_data;
-		tcp::TcpConnection* client = ctx.client;
-
-		TzDateTime ldt = datetime::now().to_local();
-		String date = datetime::tformat(DateTimeFormat.RFC3339, ldt);
-
-		DString content;
-		content.tinit();
-
-		content.appendf("HTTP/1.1 %d %s\r\n", response.status, response.status_text.value);
-
-		// Headers
-		content.appendf("Server: CEB/0.1.1\r\n");
-		content.appendf("Date: %s\r\n", date);
-		content.appendf("Content-Length: %d\r\n", response.data.len());
-		content.appendf("Content-Type: %s\r\n", response.content_type.mime_type);
-
-		foreach (key : response.headers.tkeys())
-		{
-			content.appendf("%s: %s\r\n", key, response.headers.get(key)!!);
-		}
-
-		// Data
-		content.appendf("\r\n%s", response.data.str_view());
-
-		String content_str = content.str_view();
-		if (catch err = client.write((char[])content_str.ptr[:content_str.len], &on_write, ctx))
-		{
-			io::eprintfn("Initial write failed: %s", err);
-			ctx.parser.free();
-			free(ctx);
-			client.close();
-		}
-
-		response.data.free();
-	};
-}
-
-fn void on_write(tcp::TcpConnection* client, int status, void* user_data)
-{
-	ServerConnectionCtx* ctx = (ServerConnectionCtx*)user_data;
-	if (status != 0)
-	{
-		io::eprintfn("Write failed");
+		content.appendf("%s: %s\r\n", key, response.headers.get(key)!!);
 	}
-	ctx.parser.free();
-	free(ctx);
-	client.close();
+
+	content.appendf("\r\n%s", response.data.str_view());
+
+	String content_str = content.str_view();
+	write_async(conn_ctx.client, (char[])content_str.ptr[:content_str.len], conn_ctx);
+
+	response.data.free();
 }
+
 
 fn void on_connection(tcp::TcpConnection* server, tcp::TcpConnection* client, void* user_data)
 {
-	// io::printfn("New client connected!");
 	ServerConnectionCtx* ctx = mem::new(ServerConnectionCtx);
 	ctx.server = (Server*)user_data;
 	ctx.parser.init();
+	ctx.client = client;
 
-	client.start_read(&on_alloc, &on_read, ctx)!!;
+	// Start connection worker fiber
+	ctx.fiber = co::co_create(128 * 1024, &connection_worker);
+	active_ctx = ctx;
+	co::co_switch(ctx.fiber);
 }
 
-fn Server* Server.init(&self)
-{
-	self.middleware.init(mem);
-	self.router.init();
-	return self;
-}
-
-fn RouteInfo* Server.find_route(&this, String pathname, HttpVerb method) => this.router.find_route(pathname, method);
-
-fn void* Server.use(&this, Middleware middleware_ctx)
-{
-	this.middleware.push(middleware_ctx);
-	return null;
-}

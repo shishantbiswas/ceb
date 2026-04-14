@@ -12,5 +12,5 @@
   - remove "callback hell" for [coroutines](https://github.com/hnes/libaco)
   - fix memory leak for file handle in response
   - handle http2, http3 and websockets
-
+  - gzip/compression
 

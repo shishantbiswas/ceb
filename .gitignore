@@ -2,3 +2,4 @@ build/
 out/
 proto
 *node_modules*
+test.*

@@ -5,11 +5,12 @@ import std::collections::map;
 import ceb;
 import ceb::enums;
 
-fn void userHandler(Context ctx)
+fn Response userHandler(Context ctx)
 {
 	DString body;
 	body.init(mem);
 	body.append("User ID: ");
+	Response res = { .status = 200, .status_text = StatusText.OK, .data = body, .content_type = ContentType.TXT };
 	if (ctx.req.params.has_key("id"))
 	{
 		body.append(ctx.req.params["id"]!!);
@@ -18,29 +19,22 @@ fn void userHandler(Context ctx)
 	{
 		body.append("unknown");
 	}
-	{
-		Response res = { .status = 200, .status_text = StatusText.OK, .data = body, .content_type = ContentType.TXT };
-		res.headers.tinit();
-		ctx.response(res);
-	}
-	ctx.next.call();
+	res.headers.tinit();
+	return res;
 }
 
-fn void apiHandler(Context ctx)
+fn Response apiHandler(Context ctx)
 {
 	DString body;
 	body.init(mem);
 	body.append("API Catch-all");
+	Response res = { .status = 200, .status_text = StatusText.OK, .data = body, .content_type = ContentType.TXT };
 	io::printn(ctx.req.pathname);
-	{
-		Response res = { .status = 200, .status_text = StatusText.OK, .data = body, .content_type = ContentType.TXT };
-		res.headers.tinit();
-		ctx.response(res);
-	}
-	ctx.next.call();
+	res.headers.tinit();
+	return res;
 }
 
-fn void booboo(Context ctx)
+fn Response booboo(Context ctx)
 {
 	DString body;
 	body.tinit();
@@ -55,8 +49,7 @@ fn void booboo(Context ctx)
 	body.append("Tell'em kendrick did it");
 	
 	response.data = body;
-	ctx.response(response);
-	ctx.next.call();
+	return response;
 }
 
 
@@ -79,8 +72,7 @@ fn int main()
 				.content_type = ContentType.TXT
 			};
 			res.headers.tinit();
-			ctx.response(res);
-			ctx.next.call();
+			return res;
 		}
 		)
 		// casting is optional from compiler version 0.7.10
