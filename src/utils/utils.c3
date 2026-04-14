@@ -127,7 +127,7 @@ fn Response read_file(Server* server, String filename, Context ctx)
 	return res;
 }
 
-	color.init(mem);
+enum LogPrefix : (String direction)
 {
 	OUTGOING { "-->" },
 	INCOMING { "<--" },
@@ -137,7 +137,7 @@ fn Response read_file(Server* server, String filename, Context ctx)
 fn String color_status(int status)
 {
 	DString color;
-enum LogPrefix : (String direction)
+	color.init(mem);
 	defer color.free();
 
 	switch ((status / 100) | 0)
