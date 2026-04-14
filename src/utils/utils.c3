@@ -127,7 +127,7 @@ fn Response read_file(Server* server, String filename, Context ctx)
 	return res;
 }
 
-enum LogPrefix : (String direction)
+	color.init(mem);
 {
 	OUTGOING { "-->" },
 	INCOMING { "<--" },
@@ -137,7 +137,7 @@ enum LogPrefix : (String direction)
 fn String color_status(int status)
 {
 	DString color;
-	color.init(mem);
+enum LogPrefix : (String direction)
 	defer color.free();
 
 	switch ((status / 100) | 0)
@@ -170,7 +170,7 @@ fn Response logger_procedure(Context ctx)
 	io::printfn(
 		"[LOGGER %s]: %s %s at path '%s'",
 		date,
-		LogPrefix.OUTGOING.direction,
+		LogPrefix.INCOMING.direction,
 		ctx.req.method.str_val,
 		ctx.req.pathname
 	);
@@ -180,7 +180,7 @@ fn Response logger_procedure(Context ctx)
 	io::printfn(
 		"[LOGGER %s]: %s %s at path '%s' %s",
 		date,
-		LogPrefix.INCOMING.direction,
+		LogPrefix.OUTGOING.direction,
 		ctx.req.method.str_val,
 		ctx.req.pathname,
 		color_status(res.status)
