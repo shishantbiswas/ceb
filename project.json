@@ -24,8 +24,8 @@
     "test/**"
   ],
   "output": "build",
-  "linker-search-paths": ["lib/c3co.c3l"],
-  "linked-libraries": ["c3co"],
+  "linker-search-paths": ["lib/c3co.c3l/build"],
+  "linked-libraries": ["-l:c3co.a"],
   "targets": {
     "web": {
       "sources": [

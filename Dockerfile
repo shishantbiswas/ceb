@@ -60,6 +60,7 @@ COPY --from=install /usr/local/bin/c3c /usr/local/bin/c3c
 COPY --from=install /usr/local/lib/c3 /usr/local/lib/c3
 COPY . .
 
+RUN cd lib/c3co.c3l && c3c build
 RUN c3c build web
 
 
