@@ -154,6 +154,7 @@ struct ServerConnectionCtx
 	bool has_error;
 	char[] read_buffer;
 	bool write_done;
+	bool done;
 }
 
 // Async TCP primitives for fibers
@@ -177,6 +178,11 @@ fn void on_read_async(tcp::TcpConnection* client, char[] data, void* user_data)
 	client.stop_read()!!;
 	ctx.read_buffer = data;
 	co::co_switch(ctx.fiber);
+	if (ctx.done)
+	{
+		co::co_delete(ctx.fiber);
+		free(ctx);
+	}
 }
 
 fn void on_write_async(tcp::TcpConnection* client, int status, void* user_data)
@@ -184,6 +190,11 @@ fn void on_write_async(tcp::TcpConnection* client, int status, void* user_data)
 	ServerConnectionCtx* ctx = (ServerConnectionCtx*)user_data;
 	ctx.write_done = true;
 	co::co_switch(ctx.fiber);
+	if (ctx.done)
+	{
+		co::co_delete(ctx.fiber);
+		free(ctx);
+	}
 }
 
 
@@ -227,7 +238,8 @@ fn void connection_worker(void* data)
 
 		conn_ctx.parser.free();
 		conn_ctx.client.close();
-		free(conn_ctx);
+		conn_ctx.done = true;
+		co::co_switch(conn_ctx.server.loop_fiber);
 	};
 }
 
@@ -265,10 +277,16 @@ fn void on_connection(tcp::TcpConnection* server, tcp::TcpConnection* client, vo
 	ctx.server = (Server*)user_data;
 	ctx.parser.init();
 	ctx.client = client;
+	ctx.done = false;
 
 	// Start connection worker fiber
 	ctx.fiber = co::co_create(128 * 1024, &connection_worker);
 	active_ctx = ctx;
 	co::co_switch(ctx.fiber);
+	if (ctx.done)
+	{
+		co::co_delete(ctx.fiber);
+		free(ctx);
+	}
 }
 
